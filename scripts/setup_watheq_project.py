@@ -137,20 +137,43 @@ class GitHubProvisioner:
                 owner {
                   id
                   login
-                }
-                projectsV2(first: 20) {
-                  nodes {
-                    id
-                    title
-                    number
-                    fields(first: 20) {
+                  ... on User {
+                    projectsV2(first: 50) {
                       nodes {
-                        ... on ProjectV2SingleSelectField {
-                          id
-                          name
-                          options {
-                            id
-                            name
+                        id
+                        title
+                        number
+                        fields(first: 20) {
+                          nodes {
+                            ... on ProjectV2SingleSelectField {
+                              id
+                              name
+                              options {
+                                id
+                                name
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  ... on Organization {
+                    projectsV2(first: 50) {
+                      nodes {
+                        id
+                        title
+                        number
+                        fields(first: 20) {
+                          nodes {
+                            ... on ProjectV2SingleSelectField {
+                              id
+                              name
+                              options {
+                                id
+                                name
+                              }
+                            }
                           }
                         }
                       }
@@ -167,6 +190,7 @@ class GitHubProvisioner:
                 milestones(first: 20, states: [OPEN]) {
                   nodes {
                     id
+                    number
                     title
                     description
                     dueOn
@@ -211,7 +235,9 @@ class GitHubProvisioner:
             node["title"]: node for node in repo.get("issues", {}).get("nodes", [])
         }
 
-        for project in repo.get("projectsV2", {}).get("nodes", []):
+        # Load projects from owner (User or Organization), not repository
+        projects_list = owner_info.get("projectsV2", {}).get("nodes", [])
+        for project in projects_list:
             if project["title"] == "Watheq Delivery Board":
                 self.project_id = project["id"]
                 self.project_number = project["number"]
@@ -225,6 +251,10 @@ class GitHubProvisioner:
                         option["name"]: option["id"]
                         for option in field.get("options", [])
                     }
+                print(
+                    f"✓ Found existing project: Watheq Delivery Board #{self.project_number}"
+                )
+                break
 
     def load_user_ids(self, logins: List[str]) -> None:
         unresolved = [login for login in logins if login and login not in self.users]
@@ -600,9 +630,43 @@ class GitHubProvisioner:
                 note=f"Set project field {field_name}={option_name}",
             )
 
+    def update_issue(self, issue_number: int, definition: IssueDefinition) -> None:
+        """Update an existing issue using REST API."""
+        label_names = definition.labels
+        milestone_title = definition.milestone
+        milestone_number = self.milestones[milestone_title]["number"]
+
+        # Use REST API to update issue
+        url = f"https://api.github.com/repos/{self.owner}/{self.repo}/issues/{issue_number}"
+        payload = {
+            "title": definition.title,
+            "body": definition.body,
+            "labels": label_names,
+            "milestone": milestone_number,
+        }
+        if definition.assignee:
+            payload["assignees"] = [definition.assignee]
+
+        if self.dry_run:
+            print(f"[DRY-RUN] Would update issue #{issue_number}: {definition.title}")
+            return
+
+        response = self.session.patch(url, json=payload)
+        if response.status_code not in (200, 201):
+            raise RuntimeError(
+                f"Failed to update issue #{issue_number}: {response.status_code} {response.text}"
+            )
+        print(f"✓ Updated issue #{issue_number}: {definition.title}")
+
     def ensure_issue(self, definition: IssueDefinition) -> None:
         if definition.title in self.existing_issues:
             issue_id = self.existing_issues[definition.title]["id"]
+            issue_number = self.existing_issues[definition.title]["number"]
+
+            # Update the issue content
+            self.update_issue(issue_number, definition)
+
+            # Update project fields if project exists
             if self.project_id:
                 self.add_issue_to_project(issue_id, definition.project_fields)
             return
@@ -762,7 +826,6 @@ MILESTONES: List[Dict[str, str]] = [
 
 def build_issue_definitions() -> List[IssueDefinition]:
     def format_body(
-        header: str,
         overview: List[str],
         scope: List[str],
         acceptance: List[str],
@@ -801,7 +864,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "Project Governance and Branch Hygiene",
                 overview=[
                     "Stand up the governance layer so the Watheq team can execute the academic plan with predictable cadences.",
                     "Map repository protections, PR rituals, and documentation hubs to the contract obligations in docs/aggrement.md.",
@@ -846,7 +908,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Large",
             },
             body=format_body(
-                "Next.js Admin Console Migration",
                 overview=[
                     "Deliver a Next.js 14 admin console that visualises OCR, forgery, face-verification, and ledger metadata per execution plan section 3.4.",
                     "Ensure accessibility, bilingual readiness, and integration with the FastAPI orchestrator endpoints.",
@@ -893,7 +954,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "Flutter Client Blueprint and Handoff",
                 overview=[
                     "Establish a Flutter intake client that matches the academic UX expectations and provides a clean handoff for future collaborators.",
                     "Document submission workflow, bilingual layout, and API handshake to keep integration trivial later in the semester.",
@@ -939,7 +999,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Large",
             },
             body=format_body(
-                "FastAPI Backend Architecture & Database Schema",
                 overview=[
                     "Implement the FastAPI backbone that mirrors the academic ERD and orchestrates OCR, forgery, face, IPFS, and Fabric services.",
                     "Migrate persistence to PostgreSQL with Alembic migrations, ensuring compatibility with future AI modules.",
@@ -947,24 +1006,39 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 scope=[
                     "Docker-compose for PostgreSQL and local supporting services (Redis optional for retries).",
                     "SQLAlchemy models and Alembic migrations for documents, OCR results, verification scores, hash ledger metadata, and retry queue.",
+                    "Define complete database schema: `documents` (id, user_name, document_type, upload_path, ipfs_cid, created_at), `ocr_results` (document_id, extracted_text, confidence), `verification_results` (document_id, seal_score, signature_score, face_score, overall_status), `document_hashes` (document_id, sha256, fabric_tx_id, ledger_status, recorded_at).",
                     "FastAPI routers for OCR, forgery, face verification, ledger lookup, and `/api/process-document` orchestration stub.",
-                    "Dependency-injected service layer with clear interfaces for OCR, forgery, face, IPFS, and Fabric adapters.",
-                    "pytest suite with database fixtures covering CRUD and primary orchestrator happy-path.",
+                    "Implement dependency injection pattern with service interfaces: `OCRService`, `ForgeryService`, `FaceService`, `IPFSService`, `FabricService` as abstract base classes.",
+                    "Create concrete service implementations with clear adapter pattern for external dependencies (IPFS client, Fabric SDK).",
+                    "Add FastAPI middleware for request logging, correlation IDs, error handling, and CORS configuration.",
+                    "Implement Pydantic schemas for request/response validation covering all API endpoints with examples.",
+                    "Configure SQLAlchemy session management with connection pooling and transaction handling best practices.",
+                    "Add health check endpoints (`/health`, `/readiness`) verifying database, IPFS, and Fabric connectivity.",
+                    "pytest suite with database fixtures covering CRUD operations, service layer integration tests with mocks, and primary orchestrator happy-path.",
+                    "Set up pytest-cov for code coverage reporting with minimum 70% threshold for critical paths.",
+                    "Configure logging with structlog for JSON output, log levels per environment, and integration with monitoring tools.",
                 ],
                 acceptance=[
                     "`uvicorn` server boots with PostgreSQL backend and exposed OpenAPI docs.",
-                    "Alembic upgrade/downgrade works cleanly and documented in README.",
-                    "Tests pass locally (`pytest -v`) and exercise service interfaces with mocks.",
-                    "Architecture diagram (C4 L2) checked into docs/ showing module boundaries.",
+                    "Alembic upgrade/downgrade works cleanly and documented in README with migration workflow.",
+                    "All service interfaces defined with clear contracts (methods, parameters, return types, exceptions).",
+                    "Tests pass locally (`pytest -v`) and exercise service interfaces with mocks, achieving >=70% coverage.",
+                    "Architecture diagram (C4 L2) checked into docs/ showing module boundaries and data flow.",
+                    "Health check endpoints respond correctly when dependencies are up/down with appropriate status codes.",
+                    "OpenAPI/Swagger UI accessible at `/docs` with comprehensive endpoint documentation and examples.",
                 ],
                 deliverables=[
-                    "`backend/` FastAPI project with modular routers and services.",
-                    "`backend/alembic/` migrations representing academic schema.",
-                    "Service interface documentation and dependency graph.",
+                    "`backend/` FastAPI project with modular routers (api/routes/) and services (services/).",
+                    "`backend/alembic/` migrations representing academic schema with version control.",
+                    "Service interface documentation and dependency graph in docs/architecture/backend.md.",
+                    "Docker-compose configuration for local development environment with PostgreSQL, Redis.",
+                    "Test fixtures and utilities in `tests/conftest.py` for database setup/teardown.",
                 ],
                 resources=[
                     "FastAPI SQLModel/Alembic patterns <https://fastapi.tiangolo.com/tutorial/sql-databases/>",
                     "PostgreSQL Docker image <https://hub.docker.com/_/postgres>",
+                    "Dependency injection in FastAPI <https://fastapi.tiangolo.com/tutorial/dependencies/>",
+                    "SQLAlchemy best practices <https://docs.sqlalchemy.org/en/14/orm/session_basics.html>",
                     "Execution plan sections 3.1-3.6 and ERD references",
                 ],
                 dependencies=["Project Governance and Branch Hygiene"],
@@ -985,32 +1059,44 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Large",
             },
             body=format_body(
-                "End-to-End Pipeline Integration & Migration",
                 overview=[
                     "Integrate OCR, forgery, face verification, IPFS, and Fabric into a resilient document processing pipeline (migration milestone).",
                     "Implement retry semantics and status transitions so submissions survive partial infrastructure outages.",
                 ],
                 scope=[
-                    "Implement `/api/process-document` orchestrator calling OCR, forgery, face modules, persisting results, and dispatching to trust services.",
-                    "Connect IPFS client for pinning artefacts and return CID, with fallback queue when daemon offline.",
-                    "Integrate Hyperledger Fabric SDK for `RecordDocument` invocation, capturing transaction ID and ledger status transitions.",
-                    "Add retry/compensation layer storing failed trust operations for replays, with CLI script to reconcile queue.",
-                    "Expose monitoring endpoints/logs capturing per-step timings and failure classifications.",
+                    "Implement `/api/process-document` orchestrator with multi-step workflow: receive upload → persist file → extract OCR text → run forgery detection → perform face verification (if selfie provided) → aggregate results.",
+                    "Integrate IPFS pinning: call `ipfs_service.pin_file()` to store document, capture CID, and handle connection failures with meaningful errors and retry queue.",
+                    "Integrate Fabric chaincode: invoke `RecordDocument` with SHA-256 hash, CID, and metadata via Fabric SDK, capturing transaction ID and timestamp.",
+                    "Implement status state machine: RECEIVED → PROCESSING → OCR_COMPLETE → VERIFICATION_COMPLETE → IPFS_PINNED → LEDGER_RECORDED → COMPLETED (or FAILED with substatus).",
+                    "Add retry/compensation layer: create `retry_queue` table for failed IPFS pins and Fabric submissions, with background worker polling and exponential backoff (1m, 5m, 15m, 1h).",
+                    "Build CLI reconciliation tool (`scripts/retry_failed_operations.py`) to manually trigger retries with filtering by operation type and age.",
+                    "Expose monitoring/observability: add structured logging with correlation IDs per submission, timing metrics for each pipeline step, and failure classification (IPFS_UNREACHABLE, FABRIC_TIMEOUT, OCR_FAILED).",
+                    "Create comprehensive error handling: wrap each service call in try-except with specific exception types, rollback database on critical failures, and return detailed error responses to clients.",
+                    "Add idempotency: ensure resubmitting same document hash doesn't duplicate ledger entries, check existing records before processing.",
+                    "Implement transaction boundaries: use database transactions to ensure atomicity of status updates and result persistence.",
+                    "Add performance optimization: process OCR, forgery, and face verification in parallel where possible using asyncio.gather or ThreadPoolExecutor.",
                 ],
                 acceptance=[
-                    "Sample CLI (`scripts/demo_workflow.py`) runs end-to-end producing CID, hash, and Fabric transaction ID.",
-                    "Offline IPFS or Fabric scenarios captured, queued, and replayed successfully.",
-                    "Integration tests mock IPFS/Fabric but assert orchestrator branching, with at least one live smoke test documented.",
-                    "Migration runbook updated with integration order and rollback strategy.",
+                    "Sample CLI (`scripts/demo_workflow.py --doc sample.jpg --selfie selfie.jpg`) runs end-to-end producing CID, hash, and Fabric transaction ID with detailed step-by-step output.",
+                    "Offline IPFS scenarios: daemon stopped during submission results in queued retry entry, restarting daemon allows successful reconciliation via retry script.",
+                    "Offline Fabric scenarios: network unavailable during submission queues ledger write, manual replay via CLI script successfully records to chain when network restored.",
+                    "Integration tests in `tests/test_pipeline.py` mock IPFS/Fabric but assert correct orchestrator branching, status transitions, and error handling for each failure mode.",
+                    "At least one live smoke test documented in README demonstrating real IPFS + Fabric integration with all services running.",
+                    "Migration runbook updated in `docs/runbook.md` with integration sequence, rollback strategy, and troubleshooting steps for common failures.",
+                    "Monitoring logs demonstrate timing breakdown: OCR 2-5s, forgery 1-3s, face 1-2s, IPFS 0.5-2s, Fabric 1-3s per operation.",
                 ],
                 deliverables=[
-                    "Integrated FastAPI service with orchestrator endpoint and trust adapters.",
-                    "Retry queue design notes and replay script.",
-                    "Monitoring/log configuration summarised in docs/runbook.md.",
+                    "Integrated FastAPI service with complete `/api/process-document` orchestrator endpoint handling all workflow steps.",
+                    "Retry queue implementation with background worker or manual replay script in `scripts/`.",
+                    "Monitoring/log configuration with correlation IDs and metrics documented in docs/runbook.md.",
+                    "Demo CLI script with comprehensive output and error handling demonstration.",
+                    "Integration test suite covering happy path, partial failures, and complete outages.",
                 ],
                 resources=[
                     "IPFS HTTP client docs <https://docs.ipfs.tech/reference/http/>",
                     "Hyperledger Fabric Python SDK samples <https://github.com/hyperledger/fabric-sdk-py>",
+                    "FastAPI background tasks <https://fastapi.tiangolo.com/tutorial/background-tasks/>",
+                    "Python asyncio patterns <https://docs.python.org/3/library/asyncio-task.html>",
                     "Execution plan section 3.5-3.6 for trust services",
                 ],
                 dependencies=[
@@ -1034,7 +1120,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "Release Candidate Cutover & Demo Packaging",
                 overview=[
                     "Coordinate QA sign-off, produce bilingual documentation, and prepare the academic demo package for evaluation week.",
                     "Ensure migration plan concludes with tidy branch state, issue closure, and artifact distribution.",
@@ -1080,7 +1165,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "OCR Service Implementation with EasyOCR",
                 overview=[
                     "Deliver the OCR microservice baseline that extracts bilingual text from document uploads following execution plan section 3.1.",
                     "Provide deterministic outputs and persistence wiring so downstream verification modules can consume results.",
@@ -1125,7 +1209,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "Document Forgery Detection Baseline",
                 overview=[
                     "Implement structural similarity and edge-analysis checks to flag tampered seals/signatures per execution plan section 3.2.",
                     "Expose configurable thresholds and persist detailed metrics for downstream UI rendering.",
@@ -1159,6 +1242,167 @@ def build_issue_definitions() -> List[IssueDefinition]:
 
     issues.append(
         IssueDefinition(
+            title="Face Verification Service Implementation",
+            labels=["size:medium", "importance:required", "track:ai-ocr"],
+            milestone="M2: Core Feature Delivery",
+            assignee="toom20y",
+            project_fields={
+                "Status": "Backlog",
+                "Priority": "High",
+                "Track": "AI/OCR",
+                "Size": "Medium",
+            },
+            body=format_body(
+                overview=[
+                    "Deliver biometric face verification service matching document photos with live selfies per execution plan section 3.3.",
+                    "Implement face_recognition library with configurable thresholds and return similarity scores for downstream decision-making.",
+                ],
+                scope=[
+                    "Build `backend/services/face_service.py` with `compare_face(document_face_path, selfie_path)` function using face_recognition library.",
+                    "Implement face encoding extraction with error handling for no-face-detected scenarios.",
+                    "Add configurable acceptance threshold (default 0.6) with distance metric normalization (0-1 scale).",
+                    "Create `/api/face-verify` FastAPI route accepting two image uploads (document face + selfie) and returning match score + decision.",
+                    "Persist verification results in `verification_results.face_score` column with metadata (distance, threshold used, timestamp).",
+                    "Write pytest suite (`tests/test_face.py`) with sample face pairs (matching and non-matching) covering edge cases (no face, multiple faces, poor quality).",
+                    "Add face detection preprocessing with alignment/cropping utilities for improved matching accuracy.",
+                    "Document threshold tuning methodology and provide calibration dataset requirements.",
+                ],
+                acceptance=[
+                    "Service successfully matches known face pairs with >=90% accuracy on test dataset.",
+                    "API endpoint returns structured JSON with score, distance, decision, and confidence level.",
+                    "Graceful error handling for missing faces, blurry images, or unsupported formats with meaningful error messages.",
+                    "Tests cover at least 10 positive and 10 negative pairs with documented threshold sensitivity analysis.",
+                    "README documents face_recognition library setup, dlib requirements, and troubleshooting common installation issues.",
+                ],
+                deliverables=[
+                    "Face verification service module with comprehensive docstrings and type hints.",
+                    "FastAPI route + Pydantic schemas documented in OpenAPI/Swagger.",
+                    "Test report with accuracy metrics and confusion matrix stored in docs/test_results/face_verification.md.",
+                    "Calibration guide for threshold tuning based on security vs. usability trade-offs.",
+                ],
+                resources=[
+                    "face_recognition library <https://github.com/ageitgey/face_recognition>",
+                    "dlib installation guide <http://dlib.net/compile.html>",
+                    "Face verification best practices <https://pyimagesearch.com/2018/06/18/face-recognition-with-opencv-python-and-deep-learning/>",
+                    "Execution plan section 3.3",
+                ],
+                dependencies=["FastAPI Backend Architecture & Database Schema"],
+            ),
+        )
+    )
+
+    issues.append(
+        IssueDefinition(
+            title="Mobile Selfie Capture & Face Verification UX",
+            labels=["size:medium", "importance:required", "track:frontend-mobile"],
+            milestone="M2: Core Feature Delivery",
+            assignee="AbobakrMahdii",
+            project_fields={
+                "Status": "Backlog",
+                "Priority": "High",
+                "Track": "Frontend-Mobile",
+                "Size": "Medium",
+            },
+            body=format_body(
+                overview=[
+                    "Integrate selfie capture workflow into mobile submission flow with real-time feedback and offline handling.",
+                    "Ensure seamless UX for biometric verification aligned with document submission per execution plan section 3.3-3.4.",
+                ],
+                scope=[
+                    "Implement camera integration using Flutter `camera` plugin or React Native Camera with in-app capture UI.",
+                    "Add real-time face detection feedback during capture (face detected, center face, improve lighting) using ML Kit or equivalent.",
+                    "Design selfie review screen allowing retake with quality indicators (brightness, face size, blur detection).",
+                    "Build offline queue for selfie storage when network unavailable, with background sync on connectivity restoration.",
+                    "Integrate with `/api/face-verify` endpoint, displaying verification results with clear pass/fail UI and retry options.",
+                    "Implement accessibility features: voice guidance for capture, high contrast mode, and haptic feedback for capture confirmation.",
+                    "Add privacy controls: local encryption for stored selfies, automatic deletion after successful submission, and clear data retention policy display.",
+                    "Localize all UI strings for selfie capture flow (Arabic/English) with culturally appropriate instructions.",
+                ],
+                acceptance=[
+                    "Camera opens with face detection overlay guiding user to optimal capture position.",
+                    "Selfie successfully captured and stored locally with encryption, displayable in review screen.",
+                    "Offline submissions queued and automatically retry face verification when online, with status notification.",
+                    "Verification results display clearly with actionable feedback (accepted, rejected with reason, retry guidance).",
+                    "Accessibility features tested with screen reader and high contrast mode enabled.",
+                    "Privacy controls documented and displayed to users with consent flow before first capture.",
+                ],
+                deliverables=[
+                    "Selfie capture screens integrated into mobile submission wizard with navigation flow.",
+                    "Offline handling implementation with queue status visibility in app.",
+                    "Privacy policy screen and consent mechanism implemented.",
+                    "Widget/integration tests covering capture, offline storage, and verification result handling.",
+                ],
+                resources=[
+                    "Flutter camera plugin <https://pub.dev/packages/camera>",
+                    "ML Kit face detection <https://developers.google.com/ml-kit/vision/face-detection>",
+                    "React Native Camera <https://github.com/react-native-camera/react-native-camera>",
+                    "Mobile biometric UX patterns <https://material.io/design/platform-guidance/android-biometrics.html>",
+                    "Execution plan sections 3.3-3.4",
+                ],
+                dependencies=[
+                    "Flutter Client Blueprint and Handoff",
+                    "Face Verification Service Implementation",
+                ],
+            ),
+        )
+    )
+
+    issues.append(
+        IssueDefinition(
+            title="Face Verification Dataset & Quality Assurance",
+            labels=["size:small", "importance:required", "track:ai-ocr"],
+            milestone="M2: Core Feature Delivery",
+            assignee="toom20y",
+            project_fields={
+                "Status": "Backlog",
+                "Priority": "Medium",
+                "Track": "AI/OCR",
+                "Size": "Small",
+            },
+            body=format_body(
+                overview=[
+                    "Curate face verification dataset with document photo + selfie pairs and establish testing methodology for biometric accuracy.",
+                    "Implement quality checks and threshold calibration supporting execution plan section 3.3 requirements.",
+                ],
+                scope=[
+                    "Assemble dataset of 20+ face pairs: 10 matching (same person, document vs selfie) and 10 non-matching (different people).",
+                    "Include challenging samples: varied lighting, angles, with/without glasses, different ages, diverse demographics.",
+                    "Organize in `data/processed/face/` with clear naming convention (e.g., `person_01_doc.jpg`, `person_01_selfie.jpg`).",
+                    "Create face cropping utility (`scripts/crop_faces.py`) to extract and normalize faces from documents for consistent comparison.",
+                    "Implement threshold calibration script testing multiple acceptance thresholds (0.4-0.8) and reporting false accept/reject rates.",
+                    "Add basic liveness check exploration: capture two selfies with head movement and compare for consistency.",
+                    "Document dataset collection methodology, consent procedures, and ethical considerations in README.",
+                    "Generate test report with ROC curve, optimal threshold recommendation, and accuracy metrics.",
+                ],
+                acceptance=[
+                    "Dataset committed with at least 20 pairs (50% matching, 50% non-matching) covering diverse scenarios.",
+                    "Cropping utility successfully extracts faces from documents with consistent output dimensions.",
+                    "Calibration script produces threshold recommendation with supporting metrics (accuracy, precision, recall).",
+                    "Liveness check concept validated with at least 3 test subjects and documented findings.",
+                    "Ethical guidelines documented including anonymization strategy and data retention policy.",
+                ],
+                deliverables=[
+                    "Face verification dataset with manifest documenting each pair and ground truth labels.",
+                    "Face cropping script with usage documentation.",
+                    "Calibration report stored in `docs/test_results/face_calibration.md` with ROC curve visualization.",
+                    "Liveness check exploration notes and recommendations for future enhancement.",
+                ],
+                resources=[
+                    "Face detection with dlib <http://dlib.net/face_landmark_detection.py.html>",
+                    "OpenCV face detection tutorial <https://docs.opencv.org/4.x/d2/d99/tutorial_js_face_detection.html>",
+                    "Biometric testing methodology <https://www.nist.gov/programs-projects/face-recognition-vendor-test-frvt>",
+                    "Execution plan section 3.3 bonus items",
+                ],
+                dependencies=[
+                    "Dataset Assembly & Annotation Toolkit",
+                    "Face Verification Service Implementation",
+                ],
+            ),
+        )
+    )
+
+    issues.append(
+        IssueDefinition(
             title="Dataset Assembly & Annotation Toolkit",
             labels=["size:small", "importance:bonus", "track:ai-ocr"],
             milestone="M1: Foundation & Setup",
@@ -1170,7 +1414,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Small",
             },
             body=format_body(
-                "Dataset Assembly & Annotation Toolkit",
                 overview=[
                     "Curate initial document dataset with tampered variants and create lightweight annotation helpers for OCR/forgery benchmarking.",
                 ],
@@ -1213,7 +1456,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "IPFS Infrastructure and Service Wrapper",
                 overview=[
                     "Provision local IPFS node and Python wrapper to pin documents, surface CIDs, and expose diagnostics per execution plan section 3.5.",
                 ],
@@ -1257,7 +1499,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Large",
             },
             body=format_body(
-                "Hyperledger Fabric Test Network & Chaincode",
                 overview=[
                     "Stand up Fabric test network and author chaincode to persist document hashes, tying into execution plan section 3.5.",
                     "Provide automation scripts so teammates can bootstrap network quickly during integration weeks.",
@@ -1302,7 +1543,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Small",
             },
             body=format_body(
-                "Ledger Reliability & Retry Strategy",
                 overview=[
                     "Design resilience pattern for ledger writes, ensuring document hashes eventually land on chain even under transient outages.",
                 ],
@@ -1344,7 +1584,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "UX Research & Figma Wireframes",
                 overview=[
                     "Capture user journeys and wireframes for admin and citizen experiences based on execution plan Phase 1.",
                 ],
@@ -1384,7 +1623,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "Quality Assurance Playbook & Test Automation",
                 overview=[
                     "Define QA strategy, automation coverage, and manual test matrix supporting execution plan Phase 4.",
                 ],
@@ -1427,7 +1665,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Medium",
             },
             body=format_body(
-                "Academic Documentation Pack",
                 overview=[
                     "Compile academic deliverables (reports, bilingual user guides, presentation deck) required for grading per contract and plan.",
                 ],
@@ -1467,7 +1704,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Small",
             },
             body=format_body(
-                "Risk Register and Mitigation Log",
                 overview=[
                     "Establish central risk register capturing technical, schedule, and academic compliance risks.",
                 ],
@@ -1507,7 +1743,6 @@ def build_issue_definitions() -> List[IssueDefinition]:
                 "Size": "Small",
             },
             body=format_body(
-                "Analytics & Reporting Dashboard",
                 overview=[
                     "Prototype lightweight analytics dashboards for supervisors (verification throughput, tamper trends).",
                 ],
