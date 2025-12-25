@@ -1,0 +1,87 @@
+# Example configuration for the project. Copy to `config.yaml` and fill values.
+
+paths:
+  reference_logo: "data/reference/reference_logo.png"
+  model_checkpoint: "models/logo_resnet50.pt"  # replace with your local path or leave blank if using external model
+  output_dir: "output/"
+  generation_log: "data/generation_log.json"
+  reference_stamp: "data/reference/reference_stamp.png"
+  stamp_model_checkpoint: "models/stamp_resnet50.pt"
+
+roi:
+  x_start_ratio: 0.35
+  x_end_ratio: 0.65
+  y_start_ratio: 0.0
+  y_end_ratio: 0.20
+
+stamp_roi:
+  x_start_ratio: 0.35
+  x_end_ratio: 0.65
+  y_start_ratio: 0.75
+  y_end_ratio: 1.0
+
+preprocessing:
+  target_size: [224, 224]
+  use_clahe: true
+  clahe_clip_limit: 2.0
+  clahe_tile_grid: [8, 8]
+
+thresholds:
+  ssim:
+    strong_genuine: 0.90
+    suspicious: 0.70
+  orb:
+    strong_genuine: 0.35
+    suspicious: 0.15
+    min_good_matches: 10
+  resnet:
+    strong_genuine: 0.80
+    suspicious: 0.50
+
+stamp_thresholds:
+  ssim:
+    strong_genuine: 0.85
+    suspicious: 0.65
+  orb:
+    strong_genuine: 0.25
+    suspicious: 0.10
+    min_good_matches: 8
+  siamese:
+    strong_genuine: 0.80
+    suspicious: 0.60
+  resnet:
+    strong_genuine: 0.85
+    suspicious: 0.50
+
+training:
+  epochs: 50
+  batch_size: 16
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  dropout: 0.5
+  early_stopping_patience: 10
+  freeze_backbone: true
+  unfreeze_last_block: true
+  num_workers: 4
+
+dataset:
+  genuine_count: 600
+  forged_count: 600
+  train_ratio: 0.8
+  level_distribution:
+    obvious: 0.33
+    subtle: 0.33
+    near_authentic: 0.34
+  random_seed: 42
+
+stamp_verification:
+  jitter:
+    h_range: 0.08
+    v_range: 0.05
+    h_step: 0.02
+    v_step: 0.01
+  siamese:
+    input_size: [224, 224]
+    feature_dim: 2048
+
+# NOTE: Do not commit secrets (api keys, passwords). Keep them in a local-only file or environment variables.
