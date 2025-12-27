@@ -1,0 +1,257 @@
+Watheq Project Execution Plan – Best Practices Edition
+This document delivers a comprehensive, step-by-step execution plan for the "Watheq" project using a hybrid approach that combines Stage-Gate governance with incremental delivery. It is designed as a hands-on reference covering frameworks, roles, deliverables, controls, and performance indicators for every phase.
+
+Table of Contents
+1. Introduction
+2. Guiding Principles
+3. Architectural Overview and Recommended Frameworks
+4. Stage-Gate Roadmap
+5. Phase-by-Phase Tasks and Deliverables
+6. Configuration and Version Control
+7. Quality Assurance and Testing
+8. Security, Compliance, and Data Governance
+9. Deployment, Operations, and Support
+10. Schedule and Resource Estimates
+Appendix A – Supporting Tools
+
+1. Introduction
+1.1 Purpose: Translate project requirements into an executable plan with clear tasks, sequencing, tooling, and deliverables.
+1.2 Stakeholders: Project lead, business analyst, UI/UX engineers, AI engineers, backend engineers, blockchain engineer, QA lead, security officer.
+1.3 Methodology: Stage-Gate (Inception, Elaboration, Construction, Transition) combined with incremental iterations for key modules (OCR, forgery detection, biometric verification, blockchain, user interfaces).
+
+2. Guiding Principles
+2.1 Value first: Prioritize components that most affect forgery detection and document authenticity.
+2.2 Continuous improvement: Review each iteration, capture lessons learned, and feed them into the next sprint.
+2.3 Architecture upfront: Lock critical design decisions early to reduce rework.
+2.4 Automation everywhere: Adopt CI/CD, automated testing, and deployment scripts to minimize human error.
+2.5 Security by default: Build privacy and security controls into every layer from day one.
+2.6 Living documentation: Keep all documents current with project progress.
+
+3. Architectural Overview and Recommended Frameworks
+3.1 Backend: FastAPI (Python) or NestJS (TypeScript); prefer FastAPI for seamless AI integration. ORM: SQLAlchemy + Alembic. Database: PostgreSQL.
+3.2 AI Processing: PyTorch or TensorFlow, served via TorchServe or FastAPI microservices. Use OpenCV, Albumentations, Tesseract OCR, TrOCR, DeepFace.
+3.3 Blockchain & Decentralized Storage: Hyperledger Fabric (private network) with IPFS cluster. Alternative PoC stack: Ganache + Solidity contracts. Integrate via web3.py or Fabric SDK.
+3.4 Web Frontend: React + TypeScript + Vite or Next.js. UI library: Material UI or Tailwind. Localization via i18next (Arabic + English).
+3.5 Mobile App: Flutter (recommended) or React Native for unified codebase and camera control. Integrate with Firebase Auth & Storage.
+3.6 Task & Background Processing: Celery + Redis for long-running tasks (OCR, training). Use Flower for monitoring.
+3.7 Infrastructure & Deployment: Docker Compose for local development; prepare Kubernetes (K3s, EKS, or AKS) for production with GitHub Actions/GitLab CI.
+3.8 Observability: Prometheus + Grafana (metrics), Sentry (error tracking), Loki or ELK stack (logs).
+3.9 Identity & Access: OAuth 2.0 (Keycloak/Auth0) or Firebase Auth with MFA for privileged accounts.
+
+4. Stage-Gate Roadmap
+Gate 0 – Initiation: Approve plan, confirm funding and team allocation.
+Gate 1 – Foundation Ready: Complete architecture, infrastructure baseline, and initial dataset readiness.
+Gate 2 – Alpha Build: Deliver integrated alpha (OCR + AI + blockchain + UI) and pass alpha tests.
+Gate 3 – Beta Release: Stabilize system, complete documentation, and release to limited beta users.
+Gate 4 – Production Launch: Go-live with operations and incident response plans in place.
+
+5. Phase-by-Phase Tasks and Deliverables
+
+Phase 0 – Initiation & Governance (1 week)
+Objective: Establish governance, communication, and shared assets.
+Prerequisites: Requirements document, team roster.
+Deliverables: Project charter, risk register, work breakdown structure, Git repository, task board, collaboration playbook.
+Key Tasks:
+0.1 Run kick-off meeting to outline vision, constraints, success metrics.
+0.2 Define roles/responsibilities via RACI matrix.
+0.3 Configure Jira/Trello; break requirements into Epics, Features, User Stories.
+0.4 Bootstrap Git repo with protected branches (`main`, `develop`, `feature/*`, `release/*`, `hotfix/*`) and CI guardrails.
+0.5 Create communication channels (Slack/Teams) for general, backend, frontend, AI, blockchain streams.
+0.6 Set up shared drive structure for documents, presentations, QA evidence.
+0.7 Launch risk register and decision log templates.
+
+Phase 1 – Architecture & Technical Blueprint (2 weeks)
+Objective: Define logical & physical architecture, select frameworks, and coding standards.
+Deliverables: Architecture Decision Records, C4 diagrams (Context, Container, Component), OpenAPI draft, detailed ERD, coding guidelines.
+Key Tasks:
+1.1 Translate quality attributes (performance, security, scalability) into explicit architectural constraints.
+1.2 Produce C4 Level 1 & Level 2 diagrams.
+1.3 Model system layers: Presentation, API Gateway, Service Layer, AI services, Data Layer, Blockchain integration.
+1.4 Confirm frameworks per section 3.
+1.5 Draw ERD with keys and indexes using draw.io/Lucidchart.
+1.6 Draft primary APIs (auth, document upload, OCR, AI verification, blockchain registration) in OpenAPI.
+1.7 Document asynchronous/event-driven needs (RabbitMQ/Kafka) if required.
+1.8 Publish coding standards (PEP8, ESLint, Prettier) and documentation conventions (docstrings, Swagger, Storybook).
+Gate Check: Architecture walkthrough with supervisor; ensure traceability to requirements.
+
+Phase 2 – Infrastructure & Environment Setup (1 week)
+Objective: Enable local dev, testing, and CI/CD pipelines.
+Deliverables: Dockerfiles, docker-compose stack, CI/CD pipeline configs, environment setup guide.
+Key Tasks:
+2.1 Create Dockerfiles per service (backend, AI, blockchain connector, web, mobile).
+2.2 Build docker-compose (local network, PostgreSQL, Redis, MinIO, Fabric CA).
+2.3 Configure GitHub Actions/GitLab CI for linting, unit tests, frontend tests, build checks.
+2.4 Configure secret management (Vault, Doppler, GitHub Secrets).
+2.5 Provide helper scripts (Makefile) for `make up`, `make migrate`, `make test`.
+
+Phase 3 – Data Management & Preparation (2 weeks, parallel to Phase 4)
+Objective: Collect, sanitize, and version datasets with compliance in mind.
+Deliverables: Data catalog, governance procedures, preprocessing scripts, data quality reports.
+Key Tasks:
+3.1 Define document scope (passports, IDs, certificates) and sample size.
+3.2 Acquire open datasets or generate synthetic samples with watermark/signature variations.
+3.3 Apply privacy masking; document compliance notes.
+3.4 Develop preprocessing scripts (deskewing, denoising, resolution enhancement) in a `data-pipeline` repo.
+3.5 Split data into train/validation/test (70/15/15) using stratified sampling.
+3.6 Implement data versioning (DVC/Git LFS) linked to S3/GCS.
+3.7 Produce data quality dashboards (clarity, template diversity, forgery variance).
+
+Phase 4 – OCR Service (3 weeks)
+Objective: Achieve high-accuracy text extraction and field parsing.
+Deliverables: Standalone OCR microservice, trained model, ≥80% test coverage, performance benchmarks.
+Key Tasks:
+4.1 Run exploratory notebooks comparing Tesseract, EasyOCR, TrOCR, DocTR.
+4.2 Fine-tune TrOCR for Arabic/English datasets.
+4.3 Implement FastAPI `/ocr/extract` endpoint supporting images/PDFs with page splitting.
+4.4 Add post-processing (spell correction, regex for dates/IDs) and field mapping.
+4.5 Persist OCR results in PostgreSQL (`document_texts` table) and raw files in MinIO/IPFS.
+4.6 Build unit/integration tests with pytest.
+4.7 Benchmark accuracy and latency; document findings.
+
+Phase 5 – Forgery Detection (4 weeks)
+Objective: Detect tampering in signatures, seals, watermarks, and embedded photos.
+Deliverables: Trained models, AI verification service, ROC/AUC reports, explainability interface.
+Key Tasks:
+5.1 Define forgery classes and labeling guidelines.
+5.2 Build extraction pipeline (OpenCV + segmentation models like U-Net/Mask R-CNN).
+5.3 Train classifiers/detectors per artifact:
+    • Signatures: Siamese/Triplet networks.
+    • Seals: EfficientNet + attention.
+    • Watermarks: Frequency domain + CNN.
+    • Photos: Deepfake detection (XceptionNet, Vision Transformers).
+5.4 Implement `/ai/verify` returning confidence scores and heatmaps (Grad-CAM).
+5.5 Deploy explainability dashboard (Streamlit/React) for reviewers.
+5.6 Generate performance reports (confusion matrices, precision/recall).
+5.7 Set up continuous training pipeline (MLflow/Kubeflow).
+
+Phase 6 – Biometric Verification (3 weeks)
+Objective: Match document photo with selfie and ensure liveness.
+Deliverables: Biometric service, liveness model, documented constraints.
+Key Tasks:
+6.1 Evaluate MTCNN, FaceNet, ArcFace, InsightFace.
+6.2 Embed selfie capture workflow (lighting guidance) in mobile app.
+6.3 Tune similarity thresholds, monitor FAR/FRR.
+6.4 Implement liveness detection (blink/head movement) using MediaPipe or SDKs.
+6.5 Store results and trigger alerts for anomalies.
+6.6 Run anti-spoofing tests (printed photo, replay, deepfake) and record outcomes.
+
+Phase 7 – Blockchain & Document Anchoring (4 weeks)
+Objective: Anchor document hashes immutably and link to IPFS.
+Deliverables: Fabric/Ethereum network, smart contracts, integration service.
+Key Tasks:
+7.1 Configure Hyperledger Fabric (CA, Orderer, Peers) with channels/policies.
+7.2 Implement chaincode (`RegisterDocument`, `GetDocument`, `RevokeDocument`).
+7.3 Deploy IPFS cluster with replication/pinning; capture CID linking.
+7.4 Build `ledger-service` (REST + gRPC) mediating backend <-> blockchain.
+7.5 Manage DID/certificate issuance tied to organization roles.
+7.6 Stress-test for duplicate prevention, performance, and disaster recovery.
+
+Phase 8 – Unified Backend & Integration (4 weeks)
+Objective: Provide a consolidated API and workflow orchestration.
+Deliverables: API gateway, OpenAPI documentation, unified auth system.
+Key Tasks:
+8.1 Structure FastAPI modules: Auth, Users, Documents, Verification, Reports, Settings.
+8.2 Implement JWT + refresh + RBAC/ABAC policies.
+8.3 Use Celery for background jobs (document processing) with monitoring.
+8.4 Centralize audit logs in dedicated storage.
+8.5 Add rate limiting/circuit breaker (Nginx, Kong, or Envoy).
+8.6 Publish Swagger UI + Postman collections for manual QA.
+
+Phase 9 – Web Admin Portal (4 weeks)
+Objective: Deliver responsive admin dashboards and workflows.
+Deliverables: React app, Storybook catalog, frontend test suite.
+Key Tasks:
+9.1 Finalize Figma design aligning with WCAG.
+9.2 Implement key screens (dashboard, document queue, verification details, reports, settings) using React + Zustand/Redux.
+9.3 Provide full i18n (Arabic RTL + English LTR).
+9.4 Integrate charts (ECharts/Recharts) and API data flows.
+9.5 Achieve ≥70% coverage with Jest/React Testing Library.
+9.6 Document components via Storybook.
+
+Phase 10 – Mobile Application (4 weeks)
+Objective: Enable end-users to submit documents and selfies.
+Deliverables: Flutter app, UI tests, offline caching support.
+Key Tasks:
+10.1 Build screens (login, document capture, selfie capture, status, notifications).
+10.2 Optimize camera capture, image compression, metadata.
+10.3 Integrate Firebase Auth, backend APIs, push notifications (Firebase Cloud Messaging).
+10.4 Implement offline queue and automatic retry.
+10.5 Test on real devices (Android/iOS) and publish via TestFlight/Play Console internal tracks.
+
+Phase 11 – Quality Assurance & End-to-End Testing (3 weeks)
+Objective: Validate system functionality, performance, and reliability.
+Key Tasks:
+11.1 Draft master test plan (functional, non-functional, security, performance).
+11.2 Execute load tests (Locust/Gatling) targeting ≥1000 documents/day throughput.
+11.3 Perform cross-browser/device compatibility tests.
+11.4 Conduct security tests (OWASP Top 10, dependency scans, internal penetration tests).
+11.5 Manage defect triage and remediation cycles.
+
+Phase 12 – Security & Compliance (continuous)
+Key Tasks:
+12.1 Enforce TLS 1.3, HSTS, CSRF defenses, and strict CSP.
+12.2 Encrypt data at rest (AES-256) for files and databases.
+12.3 Enable MFA for admins and critical users; support 2FA for general users.
+12.4 Apply least-privilege policies and access audits.
+12.5 Maintain security risk register and incident response playbooks.
+
+Phase 13 – Deployment & Operations (2 weeks)
+Key Tasks:
+13.1 Provision staging/production with Terraform/CloudFormation.
+13.2 Configure monitoring (Prometheus/Grafana) and alerting (PagerDuty/Opsgenie).
+13.3 Schedule automated backups with recovery drills (snapshots, PITR).
+13.4 Adopt blue/green or canary deployments with rollback strategy.
+13.5 Produce runbooks and incident management SOPs.
+
+Phase 14 – Documentation & Handover (2 weeks)
+Key Tasks:
+14.1 Update academic report (execution, results, recommendations).
+14.2 Prepare user manual, admin guide, operator handbook.
+14.3 Deliver presentation deck, demo video, sample datasets.
+14.4 Organize training sessions for stakeholder agencies.
+14.5 Package final deliverables (source, documentation, data, credentials).
+
+6. Configuration and Version Control
+6.1 Adopt Git Flow with mandatory pull-request reviews.
+6.2 Use Conventional Commits for change history clarity.
+6.3 Follow Semantic Versioning (v1.0.0-alpha, v1.0.0-beta, v1.0.0).
+6.4 Externalize configuration using Dynaconf or Twelve-Factor principles.
+6.5 Maintain CHANGELOG and release notes for each iteration.
+
+7. Quality Assurance and Testing
+7.1 Test layers: unit, integration, contract (Pact), end-to-end (Cypress/Playwright), performance, security.
+7.2 Static analysis tools: SonarQube, Black/Flake8, Bandit, ESLint, Stylelint.
+7.3 Code review cadence: code owners + weekly walkthroughs.
+7.4 User Acceptance Testing (UAT): derive scenarios from documented use cases.
+
+8. Security, Compliance, Data Governance
+8.1 Align with OWASP ASVS and MASVS (for mobile).
+8.2 Draft privacy policy, terms of use, and consent flows.
+8.3 Implement data retention policy with secure deletion after defined periods.
+8.4 Monitor dependencies (Dependabot/Snyk) and patch regularly.
+8.5 Schedule external security audits annually or semi-annually.
+
+9. Deployment, Operations, and Support
+9.1 Define NOC/SOC-lite structure with L1/L2/L3 support tiers.
+9.2 Automate deployments (GitOps via ArgoCD or CI/CD pipelines) with rollback capability.
+9.3 Monitor end-user experience using APM tools (New Relic, Datadog).
+9.4 Set SLA/SLO/SLI targets: availability ≥ 99%, dashboard response ≤ 3 seconds.
+9.5 Plan horizontal (auto-scaling) and vertical scaling strategies.
+
+10. Schedule and Resource Estimates
+10.1 Project duration: 32–36 weeks (adjust based on staffing).
+10.2 Team composition: 8–10 full-time core members, plus SMEs as needed.
+10.3 Milestones:
+    • End of Month 2: Gate 1 complete.
+    • End of Month 4: Alpha release.
+    • End of Month 6: Beta release.
+    • End of Month 8: Production launch.
+10.4 Tracking: burndown charts, daily stand-ups, biweekly sprint reviews, monthly steering updates.
+
+Appendix A – Supporting Tools
+• Knowledge management: Confluence or Notion.
+• Requirements traceability: RTM linking requirements to tests.
+• Risk management: risk matrix (High/Medium/Low) with mitigation plans.
+• Training: targeted workshops on OCR, Fabric, Flutter.
+
+By executing this plan, the Watheq team can deliver a production-grade system that satisfies all functional and non-functional requirements while adhering to industry best practices and providing a clear reference throughout the project lifecycle.
