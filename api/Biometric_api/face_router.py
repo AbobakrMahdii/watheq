@@ -1,18 +1,19 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from ai.face_service import FaceService
 
 router = APIRouter(prefix="/face", tags=["face"])
 
 
 def get_face_service():
+    # lazy import to avoid heavy third-party imports at app startup
+    from ai.face_service import FaceService
     return FaceService()
 
 
-@router.post("/face/verify")
+@router.post("/verify")
 async def verify_face(
     photo1: UploadFile = File(...),
     photo2: UploadFile = File(...),
-    service: FaceService = Depends(get_face_service),
+    service: "FaceService" = Depends(get_face_service),
 ):
     try:
         data1 = await photo1.read()

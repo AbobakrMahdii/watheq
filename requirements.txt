@@ -1,0 +1,45 @@
+# Combined requirements for the project (auto-generated)
+# - Contains pinned entries from existing requirements files where available
+# - Contains other commonly used third-party packages detected across the codebase
+
+# From api/requirements.txt
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+motor>=3.3.2
+pydantic>=2.5.0
+python-multipart>=0.0.6
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+pymongo>=4.6.0
+
+# From ai/LogoAndStamp/requirements.txt
+numpy>=1.21.0
+opencv-python>=4.5.0
+scikit-image>=0.19.0
+Pillow>=9.0.0
+PyYAML>=6.0
+pdf2image>=1.16.0
+torch>=2.0.0
+torchvision>=0.15.0
+fpdf2>=2.7.0
+jsonschema>=4.17.0
+pytest>=7.0.0
+tqdm>=4.64.0
+albumentations>=1.3.0
+
+# Additional third-party packages detected in the code (no pinned versions)
+requests
+python-dotenv
+matplotlib
+pandas
+seaborn
+scikit-learn
+PyMuPDF
+deepface
+databases
+SQLAlchemy
+aiomysql
+email-validator
+
+# NOTE: Some packages (e.g., opencv, poppler for pdf2image, CUDA for torch) have
+# system-level dependencies. Install those separately if needed.

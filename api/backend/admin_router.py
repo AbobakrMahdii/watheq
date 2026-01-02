@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from bson import ObjectId
 
 from database import get_user_collection
 from security import get_current_admin, get_current_super_admin
@@ -43,13 +42,12 @@ async def make_admin(
 ):
     users = get_user_collection()
 
-    if not ObjectId.is_valid(user_id):
+    try:
+        uid = int(user_id)
+    except Exception:
         raise HTTPException(400, "Invalid user id")
 
-    await users.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {"role": "admin"}}
-    )
+    await users.update_one({"_id": uid}, {"$set": {"role": "admin"}})
 
     return {"message": "User promoted to admin"}
 
@@ -63,7 +61,12 @@ async def remove_admin(
 ):
     users = get_user_collection()
 
-    user = await users.find_one({"_id": ObjectId(user_id)})
+    try:
+        uid = int(user_id)
+    except Exception:
+        raise HTTPException(400, "Invalid user id")
+
+    user = await users.find_one({"_id": uid})
     if not user:
         raise HTTPException(404, "User not found")
 
@@ -71,7 +74,7 @@ async def remove_admin(
         raise HTTPException(403, "Cannot demote super admin")
 
     await users.update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": uid},
         {"$set": {"role": "user"}}
     )
 
