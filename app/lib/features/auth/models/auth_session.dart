@@ -11,4 +11,3 @@ class AuthSession {
   final String role;
   final String email;
 }
-
