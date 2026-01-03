@@ -84,6 +84,7 @@ async def startup_event():
     CREATE TABLE IF NOT EXISTS users (
       id BIGINT PRIMARY KEY AUTO_INCREMENT,
       name VARCHAR(255),
+      username VARCHAR(255) UNIQUE,
       email VARCHAR(255) UNIQUE,
       password VARCHAR(255),
       role VARCHAR(50)
@@ -91,6 +92,10 @@ async def startup_event():
     """
     try:
         await db_module.database.execute(create_sql)
+        try:
+            await db_module.database.execute("ALTER TABLE users ADD COLUMN username VARCHAR(255) UNIQUE;")
+        except Exception:
+            pass
     except Exception:
         # non-fatal on startup
         pass

@@ -27,17 +27,25 @@ class UsersCollection:
         if not filt:
             return None
         if "_id" in filt:
-            q = "SELECT id as _id, name, email, password, role FROM users WHERE id = :id"
+            q = "SELECT id as _id, name, username, email, password, role FROM users WHERE id = :id"
             row = await self.db.fetch_one(q, values={"id": int(filt["_id"])})
             return dict(row) if row else None
+        if "username" in filt:
+            q = "SELECT id as _id, name, username, email, password, role FROM users WHERE username = :username"
+            row = await self.db.fetch_one(q, values={"username": filt["username"]})
+            return dict(row) if row else None
         if "email" in filt:
-            q = "SELECT id as _id, name, email, password, role FROM users WHERE email = :email"
+            q = "SELECT id as _id, name, username, email, password, role FROM users WHERE email = :email"
             row = await self.db.fetch_one(q, values={"email": filt["email"]})
             return dict(row) if row else None
         return None
 
     async def insert_one(self, doc: Dict[str, Any]) -> int:
-        q = "INSERT INTO users (name, email, password, role) VALUES (:name, :email, :password, :role)"
+        username = doc.get("username")
+        if username:
+            q = "INSERT INTO users (name, username, email, password, role) VALUES (:name, :username, :email, :password, :role)"
+        else:
+            q = "INSERT INTO users (name, email, password, role) VALUES (:name, :email, :password, :role)"
         return await self.db.execute(q, values=doc)
 
     async def update_one(self, filt: Dict[str, Any], update: Dict[str, Any]) -> int:
@@ -66,17 +74,24 @@ class UsersCollection:
         async def _iter():
             if filt and "role" in filt:
                 if isinstance(filt["role"], dict) and "$in" in filt["role"]:
-                    vals = tuple(filt["role"]["$in"])
-                    q = "SELECT id as _id, name, email, password, role FROM users WHERE role IN :vals"
-                    rows = await self.db.fetch_all(
-                        q.replace(':vals', ','.join([':v'+str(i) for i in range(len(vals))])),
-                        values={f'v{i}': vals[i] for i in range(len(vals))}
-                    )
+                    vals = list(filt["role"]["$in"] or [])
+                    if not vals:
+                        rows = []
+                    else:
+                        placeholders = ", ".join([f":v{i}" for i in range(len(vals))])
+                        q = (
+                            "SELECT id as _id, name, username, email, password, role "
+                            f"FROM users WHERE role IN ({placeholders})"
+                        )
+                        rows = await self.db.fetch_all(
+                            q,
+                            values={f"v{i}": vals[i] for i in range(len(vals))},
+                        )
                 else:
-                    q = "SELECT id as _id, name, email, password, role FROM users WHERE role = :role"
+                    q = "SELECT id as _id, name, username, email, password, role FROM users WHERE role = :role"
                     rows = await self.db.fetch_all(q, values={"role": filt["role"]})
             else:
-                q = "SELECT id as _id, name, email, password, role FROM users"
+                q = "SELECT id as _id, name, username, email, password, role FROM users"
                 rows = await self.db.fetch_all(q)
             for r in rows:
                 yield dict(r)
@@ -112,9 +127,16 @@ async def init_db():
     CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
+        username VARCHAR(100) UNIQUE,
         email VARCHAR(100) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
         role VARCHAR(20) NOT NULL
     );
     """
     await database.execute(query)
+
+    # Try to add username column on existing deployments (ignore if already exists)
+    try:
+        await database.execute("ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE;")
+    except Exception:
+        pass

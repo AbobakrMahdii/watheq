@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from database import get_user_collection
 from security import get_current_admin, get_current_super_admin
+from models import UserCreate
+from security import get_password_hash
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -21,6 +23,28 @@ async def get_users(admin=Depends(get_current_admin)):
     users = get_user_collection()
     return [to_public_user(u) async for u in users.find({"role": "user"})]
 
+
+@router.post("/users")
+async def create_user(user: UserCreate, admin=Depends(get_current_admin)):
+    users = get_user_collection()
+
+    if await users.find_one({"email": user.email}):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if getattr(user, "username", None) and await users.find_one({"username": user.username}):
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    await users.insert_one(
+        {
+            "name": user.name,
+            "username": getattr(user, "username", None),
+            "email": user.email,
+            "password": get_password_hash(user.password),
+            "role": "user",
+        }
+    )
+
+    return {"message": "User created"}
+
 # =========================
 # Admins list (super only)
 # =========================
@@ -31,6 +55,28 @@ async def get_admins(super_admin=Depends(get_current_super_admin)):
         to_public_user(u)
         async for u in users.find({"role": {"$in": ["admin", "super_admin"]}})
     ]
+
+
+@router.post("/admins")
+async def create_admin(user: UserCreate, super_admin=Depends(get_current_super_admin)):
+    users = get_user_collection()
+
+    if await users.find_one({"email": user.email}):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if getattr(user, "username", None) and await users.find_one({"username": user.username}):
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    await users.insert_one(
+        {
+            "name": user.name,
+            "username": getattr(user, "username", None),
+            "email": user.email,
+            "password": get_password_hash(user.password),
+            "role": "admin",
+        }
+    )
+
+    return {"message": "Admin created"}
 
 # =========================
 # Promote user → admin

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -18,19 +18,14 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: identifier, password }),
       });
 
-      if (!res.ok) throw new Error("Invalid credentials");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Invalid credentials");
 
-      const data = await res.json();
-      const token = data?.token;
-      if (token) {
-        // store token in cookie
-        document.cookie = `token=${token}; path=/`;
-        toast.success("Login successful");
-        router.push("/dashboard");
-      }
+      toast.success("Login successful");
+      router.push("/dashboard");
     } catch (err: any) {
       toast.error(err?.message || "Login failed");
     } finally {
@@ -43,11 +38,11 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white p-6 rounded shadow">
         <h2 className="text-lg font-semibold mb-4">Admin Login</h2>
         <label className="block mb-2">
-          <span className="text-sm">Username</span>
+          <span className="text-sm">Email أو Username</span>
           <input
             className="mt-1 block w-full border px-2 py-1 rounded"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             required
           />
         </label>
