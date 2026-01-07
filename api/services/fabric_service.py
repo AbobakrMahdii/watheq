@@ -1,21 +1,49 @@
 from __future__ import annotations
 
 import json
+import os
+import platform
+import shutil
 import subprocess
 from typing import Any, List, Optional, Tuple, Union
 
 
 def _bash(cmd: str) -> str:
     """
-    Run a bash command in WSL/Linux and return stdout (or raise with stderr).
+    Run a bash command and return stdout (or raise with stderr).
+
+    - On Windows: prefers WSL (`wsl.exe -e bash -lc ...`) unless `FABRIC_BASH` is set.
+    - On Linux/macOS: runs `bash -lc ...` (or `FABRIC_BASH` if set).
     """
-    p = subprocess.run(
-        ["bash", "-lc", cmd],
-        capture_output=True,
-        text=True,
-    )
+    bash_override = os.environ.get("FABRIC_BASH")
+    is_windows = platform.system().lower() == "windows"
+
+    if bash_override:
+        argv = [bash_override, "-lc", cmd]
+    elif is_windows:
+        wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+        if not wsl:
+            raise RuntimeError(
+                "WSL is not available. Install/enable WSL and a Linux distribution (e.g., Ubuntu), "
+                "or set FABRIC_BASH to a bash executable path (e.g., Git Bash)."
+            )
+        argv = [wsl, "-e", "bash", "-lc", cmd]
+    else:
+        argv = ["bash", "-lc", cmd]
+
+    p = subprocess.run(argv, capture_output=True, text=True)
     if p.returncode != 0:
-        raise RuntimeError((p.stderr or p.stdout or "unknown error").strip())
+        stderr = (p.stderr or "").strip()
+        stdout = (p.stdout or "").strip()
+        msg = stderr or stdout or "unknown error"
+        if is_windows and "execvpe(/bin/bash)" in msg:
+            msg = (
+                f"{msg}\n"
+                "WSL could not find `/bin/bash` in the default distro. "
+                "Make sure you have a working WSL distro installed and set as default, "
+                "or set FABRIC_BASH to a valid bash executable."
+            )
+        raise RuntimeError(msg)
     return (p.stdout or "").strip()
 
 

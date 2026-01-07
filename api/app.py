@@ -8,6 +8,7 @@ from .routers.face_router import router as face_router
 from .routers.ipfs_router import router as ipfs_router
 from .routers.ledger_router import router as ledger_router
 from .routers.ocr_router import router as ocr_router
+from .routers.document_router import router as document_router
 from .security import get_current_user
 from . import database as db_module
 
@@ -37,6 +38,7 @@ app.include_router(face_router, prefix="/api/v1", dependencies=[Depends(get_curr
 app.include_router(ipfs_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(ledger_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(ocr_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(document_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 def custom_openapi():

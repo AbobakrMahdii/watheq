@@ -30,7 +30,8 @@ def health_check():
         return JSONResponse(status_code=503, content={"available": False, "error": _ipfs_init_error})
 
     try:
-        return {"available": True, "version": ipfs.client.version()}
+        # Using HTTP-based IPFSService (no ipfshttpclient).
+        return {"available": True, "ok": ipfs.healthy()}
     except Exception as e:
         logger.error("IPFS health check failed: %s", e)
         return JSONResponse(status_code=503, content={"available": False, "error": str(e)})
@@ -44,7 +45,9 @@ async def pin_file(file: UploadFile = File(...)):
 
     try:
         data = await file.read()
-        cid = ipfs.client.add_bytes(data)
+        if not data:
+            raise HTTPException(status_code=400, detail="Empty file")
+        cid = ipfs.pin_bytes(data, filename=file.filename or "file")
 
         return {
             "cid": cid,
