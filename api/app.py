@@ -1,3 +1,5 @@
+import logging
+import os
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -9,8 +11,21 @@ from .routers.ipfs_router import router as ipfs_router
 from .routers.ledger_router import router as ledger_router
 from .routers.ocr_router import router as ocr_router
 from .routers.document_router import router as document_router
-from .security import get_current_user
+from .routers.document_type_router import router as document_type_router
+from .routers.admin_document_type_router import router as admin_document_type_router
+from .security import get_current_user, get_current_admin
 from . import database as db_module
+
+logger = logging.getLogger("watheq.api")
+
+def get_allowed_origins() -> list[str]:
+    env = os.getenv("ENV", "development").lower()
+    raw = os.getenv("ALLOWED_ORIGINS", "").strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    if env == "production":
+        return []
+    return ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
 app = FastAPI(
@@ -23,7 +38,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,6 +47,7 @@ app.add_middleware(
 # Include all routers
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(document_type_router)
 
 # Service routers (require authenticated user via Bearer token)
 app.include_router(face_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
@@ -39,6 +55,7 @@ app.include_router(ipfs_router, prefix="/api/v1", dependencies=[Depends(get_curr
 app.include_router(ledger_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(ocr_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(document_router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(admin_document_type_router)
 
 
 def custom_openapi():
@@ -79,7 +96,7 @@ async def startup_event():
     try:
         await db_module.database.connect()
     except Exception:
-        pass
+        logger.exception("Database connection failed on startup")
 
     # ensure users table exists (simple schema)
     create_sql = """
@@ -94,13 +111,24 @@ async def startup_event():
     """
     try:
         await db_module.database.execute(create_sql)
-        try:
-            await db_module.database.execute("ALTER TABLE users ADD COLUMN username VARCHAR(255) UNIQUE;")
-        except Exception:
-            pass
     except Exception:
         # non-fatal on startup
-        pass
+        logger.exception("Failed to ensure users table exists")
+
+    # ensure document_types table exists
+    doc_types_sql = """
+    CREATE TABLE IF NOT EXISTS document_types (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      name VARCHAR(255) UNIQUE NOT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      requires_back_image BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB;
+    """
+    try:
+        await db_module.database.execute(doc_types_sql)
+    except Exception:
+        logger.exception("Failed to ensure document_types table exists")
 
 
 @app.on_event("shutdown")
@@ -108,4 +136,4 @@ async def shutdown_event():
     try:
         await db_module.database.disconnect()
     except Exception:
-        pass
+        logger.exception("Database disconnect failed on shutdown")

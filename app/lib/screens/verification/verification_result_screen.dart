@@ -11,14 +11,18 @@ import '../../ui/widgets/app_snackbars.dart';
 class VerificationResultScreen extends StatefulWidget {
   const VerificationResultScreen({
     super.key,
-    required this.documentImage,
+    required this.documentImageFront,
+    this.documentImageBack,
     required this.personImage,
-    required this.idType,
+    required this.documentTypeId,
+    required this.documentTypeName,
   });
 
-  final File documentImage;
+  final File documentImageFront;
+  final File? documentImageBack; // Optional
   final File personImage;
-  final String idType;
+  final int documentTypeId; // Now an int
+  final String documentTypeName; // Display name
 
   @override
   State<VerificationResultScreen> createState() =>
@@ -62,9 +66,10 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       }
 
       final result = await SubmitVerificationService.instance.submit(
-        documentImage: widget.documentImage,
+        documentImageFront: widget.documentImageFront,
+        documentImageBack: widget.documentImageBack,
         personImage: widget.personImage,
-        idType: widget.idType,
+        documentTypeId: widget.documentTypeId,
       );
       if (!mounted) return;
       setState(() {
@@ -145,13 +150,13 @@ class _ErrorView extends StatelessWidget {
 class _ResultView extends StatelessWidget {
   const _ResultView({
     required this.result,
-    required this.idType,
+    required this.documentTypeName,
     required this.documentDecision,
     required this.documentPercent,
   });
 
   final SubmitVerificationResult result;
-  final String idType;
+  final String documentTypeName; // Display name
   final String? documentDecision;
   final double? documentPercent;
 
@@ -258,7 +263,7 @@ class _ResultView extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _kv('نوع الهوية', idType),
+                _kv('نوع الهوية', documentTypeName),
                 _kv('DocId', result.docId),
                 _kv('CID', result.ipfs.cid),
                 _kv('SHA256', result.sha256),

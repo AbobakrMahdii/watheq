@@ -34,9 +34,10 @@ class SubmitVerificationService {
   static final SubmitVerificationService instance = SubmitVerificationService._();
 
   Future<SubmitVerificationResult> submit({
-    required File documentImage,
+    required File documentImageFront,
+    File? documentImageBack,
     required File personImage,
-    required String idType,
+    required int documentTypeId,
   }) async {
     final session = await AuthService.instance.getSavedSession();
     if (session == null) {
@@ -83,7 +84,7 @@ class SubmitVerificationService {
     }
 
     final docId =
-        'DOC-${DateTime.now().millisecondsSinceEpoch}-${idType.hashCode.abs()}';
+        'DOC-${DateTime.now().millisecondsSinceEpoch}-${documentTypeId}';
     try {
       await LedgerService.instance.createDoc(
         docId: docId,

@@ -6,6 +6,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
 import '../../features/auth/services/auth_service.dart';
 import '../../features/biometric/services/face_verify_service.dart';
+import '../../features/verification/models/document_type_model.dart'; // New Import
+import '../../features/verification/services/document_type_api_service.dart'; // New Import
 import '../../ui/widgets/app_snackbars.dart';
 import '../camera/camera_screen.dart';
 import '../verification/verification_result_screen.dart';
@@ -18,24 +20,59 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? selectedIdType;
-  File? documentImage;
+  // Document Type related state
+  List<DocumentTypeModel> _documentTypes = [];
+  DocumentTypeModel? _selectedDocumentType;
+  bool _isLoadingDocumentTypes = true;
+  String? _documentTypesError;
+
+  // Image files
+  File? documentImageFront; // For front image
+  File? documentImageBack;  // For back image (optional based on document type)
   File? personImage;
+
   bool _isVerifying = false;
   bool _isSubmitting = false;
-
-  final List<String> idTypes = ['الهوية الوطنية', 'جواز السفر', 'رخصة القيادة'];
 
   @override
   void initState() {
     super.initState();
-    selectedIdType ??= idTypes.first;
+    _loadDocumentTypes();
   }
 
-  bool get isFormComplete =>
-      selectedIdType != null && documentImage != null && personImage != null;
+  Future<void> _loadDocumentTypes() async {
+    setState(() {
+      _isLoadingDocumentTypes = true;
+      _documentTypesError = null;
+    });
+    try {
+      _documentTypes = await DocumentTypeApiService.instance.getActiveDocumentTypes();
+      if (_documentTypes.isNotEmpty) {
+        _selectedDocumentType = _documentTypes.first;
+      }
+    } catch (e) {
+      _documentTypesError = 'فشل تحميل أنواع الوثائق: ${e.toString()}';
+      AppSnackbars.error(context, _documentTypesError!);
+    } finally {
+      setState(() {
+        _isLoadingDocumentTypes = false;
+      });
+    }
+  }
 
-  Future<void> openCamera(bool isDocument) async {
+  // Updated form completion logic
+  bool get isFormComplete {
+    if (_selectedDocumentType == null || documentImageFront == null || personImage == null) {
+      return false;
+    }
+    if (_selectedDocumentType!.requiresBackImage && documentImageBack == null) {
+      return false;
+    }
+    return true;
+  }
+
+  // Updated openCamera to handle front/back/person images
+  Future<void> openCamera(String imageType) async {
     final File? result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -46,14 +83,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (result != null) {
       setState(() {
-        if (isDocument) {
-          documentImage = result;
-        } else {
+        if (imageType == 'front') {
+          documentImageFront = result;
+        } else if (imageType == 'back') {
+          documentImageBack = result;
+        } else if (imageType == 'person') {
           personImage = result;
         }
       });
 
-      if (documentImage != null && personImage != null) {
+      // Trigger face verification only after both document front and person images are captured
+      if (documentImageFront != null && personImage != null) {
         await _verifyMatch();
       }
     }
@@ -61,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _verifyMatch() async {
     if (_isVerifying) return;
-    final doc = documentImage;
+    final doc = documentImageFront; // Use front image for face verification
     final person = personImage;
     if (doc == null || person == null) return;
 
@@ -112,7 +152,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _uploadData() {
-    // هنا ربط API لاحقًا
     _openResults();
   }
 
@@ -120,10 +159,14 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isSubmitting) return;
     if (!isFormComplete) return;
 
-    final doc = documentImage;
+    final docFront = documentImageFront;
+    final docBack = documentImageBack; // Optional back image
     final person = personImage;
-    final idType = selectedIdType;
-    if (doc == null || person == null || idType == null) return;
+    final selectedType = _selectedDocumentType; // Use the selected DocumentTypeModel
+
+    if (docFront == null || person == null || selectedType == null) return;
+    // If back image is required but not provided, also return
+    if (selectedType.requiresBackImage && docBack == null) return;
 
     setState(() => _isSubmitting = true);
     try {
@@ -131,9 +174,11 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => VerificationResultScreen(
-            documentImage: doc,
+            documentImage: docFront,
             personImage: person,
-            idType: idType,
+            // Pass the DocumentTypeModel or its ID
+            idType: selectedType.name, // Sending name for now, will adjust VerificationResultScreen later
+            documentImageBack: docBack, // Pass back image if exists
           ),
           fullscreenDialog: true,
         ),
@@ -186,41 +231,74 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 16),
 
                     // نوع الهوية
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedIdType,
-                      decoration: const InputDecoration(
-                        labelText: 'نوع الهوية',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: idTypes
-                          .map(
-                            (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          selectedIdType = value;
-                        });
-                      },
-                    ),
+                    _isLoadingDocumentTypes
+                        ? const Center(child: CircularProgressIndicator())
+                        : _documentTypesError != null
+                            ? Text(
+                                _documentTypesError!,
+                                style: const TextStyle(color: Colors.red),
+                                textAlign: TextAlign.center,
+                              )
+                            : _documentTypes.isEmpty
+                                ? const Text(
+                                    'لا توجد أنواع وثائق متاحة. يرجى إضافتها من لوحة التحكم.',
+                                    textAlign: TextAlign.center,
+                                  )
+                                : DropdownButtonFormField<DocumentTypeModel>(
+                                    value: _selectedDocumentType,
+                                    decoration: const InputDecoration(
+                                      labelText: 'نوع الهوية',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: _documentTypes
+                                        .map(
+                                          (docType) => DropdownMenuItem(
+                                            value: docType,
+                                            child: Text(docType.name),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedDocumentType = value;
+                                        // Clear back image if it's no longer required
+                                        if (!(_selectedDocumentType?.requiresBackImage ?? false)) {
+                                          documentImageBack = null;
+                                        }
+                                      });
+                                    },
+                                  ),
 
                     const SizedBox(height: 16),
 
-                    // تصوير الوثيقة
+                    // تصوير الوثيقة الأمامية
                     ElevatedButton(
-                      onPressed: () => openCamera(true),
-                      child: const Text('صورة الوثيقة'),
+                      onPressed: () => openCamera('front'),
+                      child: const Text('صورة الوثيقة الأمامية'),
                     ),
-                    if (documentImage != null) ...[
+                    if (documentImageFront != null) ...[
                       const SizedBox(height: 8),
-                      Image.file(documentImage!, height: 120),
+                      Image.file(documentImageFront!, height: 120),
+                    ],
+
+                    // تصوير الوثيقة الخلفية (شرطي)
+                    if (_selectedDocumentType?.requiresBackImage == true) ...[
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => openCamera('back'),
+                        child: const Text('صورة الوثيقة الخلفية'),
+                      ),
+                      if (documentImageBack != null) ...[
+                        const SizedBox(height: 8),
+                        Image.file(documentImageBack!, height: 120),
+                      ],
                     ],
 
                     const SizedBox(height: 16),
 
                     // تصوير الشخص
                     ElevatedButton(
-                      onPressed: () => openCamera(false),
+                      onPressed: () => openCamera('person'),
                       child: const Text('صورة الشخص'),
                     ),
                     if (personImage != null) ...[
@@ -248,4 +326,3 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}

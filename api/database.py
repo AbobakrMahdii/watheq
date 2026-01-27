@@ -105,6 +105,72 @@ def get_user_collection():
     return users
 
 # =========================
+# Document Types Collection
+# =========================
+class DocumentTypesCollection:
+    def __init__(self, db: Database):
+        self.db = db
+
+    async def find_one(self, filt: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not filt:
+            return None
+        if "_id" in filt:
+            q = "SELECT id as id, name, is_active, requires_back_image, created_at FROM document_types WHERE id = :id"
+            row = await self.db.fetch_one(q, values={"id": int(filt["_id"])})
+            return dict(row) if row else None
+        if "name" in filt:
+            q = "SELECT id as id, name, is_active, requires_back_image, created_at FROM document_types WHERE name = :name"
+            row = await self.db.fetch_one(q, values={"name": filt["name"]})
+            return dict(row) if row else None
+        return None
+
+    async def find(self, filt: Dict[str, Any] = None) -> list[Dict[str, Any]]:
+        query_parts = []
+        values = {}
+        if filt and "is_active" in filt:
+            query_parts.append("is_active = :is_active")
+            values["is_active"] = filt["is_active"]
+
+        q = "SELECT id as id, name, is_active, requires_back_image, created_at FROM document_types"
+        if query_parts:
+            q += " WHERE " + " AND ".join(query_parts)
+        q += " ORDER BY name"
+        rows = await self.db.fetch_all(q, values=values)
+        return [dict(row) for row in rows]
+
+    async def insert_one(self, doc: Dict[str, Any]) -> int:
+        q = """
+            INSERT INTO document_types (name, is_active, requires_back_image, created_at)
+            VALUES (:name, :is_active, :requires_back_image, :created_at)
+        """
+        return await self.db.execute(q, values=doc)
+
+    async def update_one(self, doc_id: int, update_data: Dict[str, Any]) -> int:
+        set_parts = []
+        values = {"id": doc_id}
+        for key, value in update_data.items():
+            set_parts.append(f"{key} = :{key}")
+            values[key] = value
+        
+        if not set_parts:
+            return 0 # No update to perform
+
+        q = f"UPDATE document_types SET {', '.join(set_parts)} WHERE id = :id"
+        return await self.db.execute(q, values=values)
+
+    async def delete_one(self, doc_id: int) -> int:
+        q = "DELETE FROM document_types WHERE id = :id"
+        return await self.db.execute(q, values={"id": doc_id})
+
+_document_types_collection: Optional[DocumentTypesCollection] = None
+
+def get_document_type_collection() -> DocumentTypesCollection:
+    global _document_types_collection
+    if _document_types_collection is None:
+        _document_types_collection = DocumentTypesCollection(database)
+    return _document_types_collection
+
+# =========================
 # Initialize DB + tables
 # =========================
 async def init_db():
@@ -140,3 +206,15 @@ async def init_db():
         await database.execute("ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE;")
     except Exception:
         pass
+
+    # Create document_types table if not exists
+    query = """
+    CREATE TABLE IF NOT EXISTS document_types (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) UNIQUE NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        requires_back_image BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """
+    await database.execute(query)

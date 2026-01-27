@@ -7,9 +7,9 @@ services:
     restart: unless-stopped
 
     ports:
-      - "4001:4001"  # Swarm
-      - "5001:5001"  # API
-      - "8080:8080"  # Gateway
+      - "4001:4001" # Swarm
+      - "5001:5001" # API
+      - "8081:8080" # Gateway
 
     volumes:
       - ipfs-data:/data/ipfs
@@ -17,7 +17,7 @@ services:
     environment:
       IPFS_PROFILE: server
 
-    command: ["daemon", "--migrate=true"]
+    command: [ "daemon", "--migrate=true" ]
 
 volumes:
   ipfs-data:
