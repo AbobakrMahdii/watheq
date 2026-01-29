@@ -5,7 +5,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
+from api.services.audit_log_service import log_file_event
 
 router = APIRouter(prefix="/document", tags=["document"])
 
@@ -89,6 +90,7 @@ def _run_logo_and_stamp_unified(input_path: Path) -> Dict[str, Any]:
 
 @router.post("/verify")
 async def verify_document(
+    request: Request,
     file: UploadFile = File(...),
     _: Any = Depends(lambda: True),
 ):
@@ -118,6 +120,15 @@ async def verify_document(
             available = [p for p in [logo_percent, stamp_percent] if p is not None]
             authenticity_percent = float(sum(available) / len(available)) if available else None
 
+            request.state.audit_logged = True
+            await log_file_event(
+                request,
+                status="success",
+                operation_type="Verify",
+                module="document",
+                file_name=file.filename,
+                file_size=len(data) if data is not None else None,
+            )
             return {
                 "final_decision": unified.get("final_decision"),
                 "authenticity_percent": authenticity_percent,
@@ -126,7 +137,26 @@ async def verify_document(
                 "raw": unified,
             }
     except HTTPException:
+        request.state.audit_logged = True
+        await log_file_event(
+            request,
+            status="failed",
+            failure_reason="Validation error",
+            operation_type="Verify",
+            module="document",
+            file_name=file.filename,
+            file_size=len(data) if "data" in locals() and data is not None else None,
+        )
         raise
     except Exception as e:
+        request.state.audit_logged = True
+        await log_file_event(
+            request,
+            status="failed",
+            failure_reason=f"{type(e).__name__}: {e}",
+            operation_type="Verify",
+            module="document",
+            file_name=file.filename,
+            file_size=len(data) if "data" in locals() and data is not None else None,
+        )
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
-

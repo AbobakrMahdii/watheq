@@ -47,7 +47,7 @@ class SubmitVerificationService {
     final FaceVerifyResult face;
     try {
       face = await FaceVerifyService.instance.verify(
-        documentPhoto: documentImage,
+        documentPhoto: documentImageFront,
         personPhoto: personImage,
       );
     } catch (e) {
@@ -62,7 +62,7 @@ class SubmitVerificationService {
 
     final String sha;
     try {
-      final bytes = await documentImage.readAsBytes();
+      final bytes = await documentImageFront.readAsBytes();
       sha = sha256.convert(bytes).toString();
     } catch (e) {
       throw SubmitVerificationException('فشل حساب بصمة الملف (SHA256)', cause: e);
@@ -70,7 +70,7 @@ class SubmitVerificationService {
 
     final IpfsPinResult ipfs;
     try {
-      ipfs = await IpfsService.instance.pinFile(file: documentImage);
+      ipfs = await IpfsService.instance.pinFile(file: documentImageFront);
     } catch (e) {
       throw SubmitVerificationException('فشل رفع الوثيقة إلى IPFS: ${e.toString()}',
           cause: e);
@@ -78,7 +78,7 @@ class SubmitVerificationService {
 
     final Map<String, dynamic> ocr;
     try {
-      ocr = await OcrService.instance.ocrDocument(file: documentImage);
+      ocr = await OcrService.instance.ocrDocument(file: documentImageFront);
     } catch (e) {
       throw SubmitVerificationException('فشل قراءة OCR: ${e.toString()}', cause: e);
     }

@@ -6,34 +6,42 @@ echo ========================================
 
 cd /d "%~dp0"
 
-REM Check if Python is installed
-python --version >nul 2>&1
+REM Use single project virtual environment in root
+set "VENV_DIR=%~dp0.venv"
+set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
+set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
+set "REQ_UNIFIED=%~dp0requirements.unified.txt"
+set "REQ_API=%~dp0api\requirements.txt"
+
+REM Check if Python 3.11 is available
+py -3.11 --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python is not installed or not in PATH
-    echo Please install Python 3.8+ and add it to PATH
+    echo ERROR: Python 3.11 is not installed.
+    echo Please install Python 3.11 and try again.
     pause
     exit /b 1
 )
 
-REM Check if virtual environment exists, if not create it
-if not exist "venv\" (
-    echo Creating virtual environment...
-    python -m venv venv
+REM Create .venv if it doesn't exist
+if not exist "%PYTHON_EXE%" (
+    echo Creating virtual environment (.venv)...
+    py -3.11 -m venv "%VENV_DIR%"
 )
 
-REM Activate virtual environment
-echo Activating virtual environment...
-call venv\Scripts\activate.bat
-
-REM Install/Update dependencies
-echo Installing dependencies...
-pip install -q --upgrade pip
-pip install -q -r requirements.txt
+REM Install dependencies only if needed
+if not exist "%VENV_DIR%\Lib\site-packages\fastapi" (
+    echo Installing dependencies (one-time)...
+    if exist "%REQ_UNIFIED%" (
+        "%PIP_EXE%" install -r "%REQ_UNIFIED%"
+    ) else (
+        "%PIP_EXE%" install -r "%REQ_API%"
+    )
+)
 
 REM Check if MySQL is running (optional check)
 echo.
 echo Checking database connection...
-python -c "import mysql.connector; print('MySQL connector available')" 2>nul || echo Warning: MySQL connector not found. Make sure MySQL is running.
+"%PYTHON_EXE%" -c "import aiomysql; print('MySQL driver available')" 2>nul || echo Warning: MySQL driver not found. Make sure MySQL is running.
 
 REM Start the API server
 echo.
@@ -43,6 +51,7 @@ echo API Docs: http://localhost:8001/api/v1/docs
 echo ========================================
 echo.
 
-python -u -m api.main
+REM Start the API server using .venv
+"%PYTHON_EXE%" -u -m api.main
 
 pause

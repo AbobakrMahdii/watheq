@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -167,6 +168,19 @@ export default function DashboardPage() {
             Logout
           </button>
         </div>
+        {/* Primary navigation entry for document types management. */}
+        <Link
+          href="/dashboard/document-types"
+          className="block w-full text-left py-2 px-3 rounded hover:bg-slate-100"
+        >
+          Document Types
+        </Link>
+        <Link
+          href="/dashboard/audit-logs"
+          className="block w-full text-left py-2 px-3 rounded hover:bg-slate-100"
+        >
+          Audit Logs
+        </Link>
         {canSeeAdminsTab && (
           <button
             className={`block w-full text-left py-2 px-3 rounded ${view === "admins" ? "bg-slate-100" : ""}`}

@@ -4,7 +4,7 @@
 
 قبل تشغيل المشروع، تأكد من تثبيت:
 
-1. **Python 3.8+**
+1. **Python 3.11+**
    ```bash
    python --version
    ```
@@ -55,10 +55,9 @@ start_backend.bat
 ```
 أو يدوياً:
 ```bash
-cd api
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.unified.txt
 python -m api.main
 ```
 
@@ -151,11 +150,10 @@ curl -X POST http://localhost:8001/api/v1/auth/login \
 
 **الحل:**
 ```bash
-cd api
-python -m venv venv
-venv\Scripts\activate
+python -m venv .venv
+.\.venv\Scripts\activate
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements.unified.txt
 python -m api.main
 ```
 

@@ -9,6 +9,7 @@ from ..security import (
     get_current_user,
     get_current_admin
 )
+from api.services.audit_log_service import log_auth_event
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -48,6 +49,13 @@ async def login(request: Request):
         password = form.get("password") or ""
 
     if not identifier or not password:
+        await log_auth_event(
+            request,
+            operation_type="Login",
+            status="failed",
+            failure_reason="Email and password are required",
+            user_identifier=identifier,
+        )
         raise HTTPException(
             status_code=400,
             detail={"message": "Email and password are required", "code": "VALIDATION_ERROR"},
@@ -60,6 +68,13 @@ async def login(request: Request):
         user = user or await users.find_one({"email": identifier})
 
     if not user or not verify_password(password, user["password"]):
+        await log_auth_event(
+            request,
+            operation_type="Login",
+            status="failed",
+            failure_reason="Invalid email or password",
+            user_identifier=identifier,
+        )
         raise HTTPException(
             status_code=401,
             detail={"message": "Invalid email or password", "code": "INVALID_CREDENTIALS"},
@@ -70,6 +85,16 @@ async def login(request: Request):
         "email": user["email"],
         "role": user.get("role", "user")
     })
+
+    await log_auth_event(
+        request,
+        operation_type="Login",
+        status="success",
+        user_id=int(user["_id"]),
+        user_name=user.get("name"),
+        user_email=user.get("email"),
+        user_role=user.get("role", "user"),
+    )
 
     return {
         "access_token": token,
@@ -86,3 +111,16 @@ def me(current_user=Depends(get_current_user)):
 @router.get("/admin/me")
 def admin_me(admin=Depends(get_current_admin)):
     return admin
+
+
+@router.post("/logout")
+async def logout(request: Request, current_user=Depends(get_current_user)):
+    await log_auth_event(
+        request,
+        operation_type="Logout",
+        status="success",
+        user_id=int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None,
+        user_email=current_user.get("email"),
+        user_role=current_user.get("role"),
+    )
+    return {"message": "logged out"}

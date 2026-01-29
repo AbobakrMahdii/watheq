@@ -33,10 +33,9 @@ Dashboard لا يستطيع الاتصال بالـ Backend API
    start_backend.bat
 
    أو يدوياً:
-   cd api
-   python -m venv venv
-   venv\Scripts\activate
-   pip install -r requirements.txt
+   python -m venv .venv
+   .\.venv\Scripts\activate
+   pip install -r requirements.unified.txt
    python -m api.main
 
 3. انتظر حتى ترى رسالة:

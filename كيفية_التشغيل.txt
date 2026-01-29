@@ -4,7 +4,7 @@
 
 📋 المتطلبات الأساسية:
 ───────────────────────────────────────────────────────────────
-✅ Python 3.8 أو أحدث
+✅ Python 3.11 أو أحدث
 ✅ Node.js 18 أو أحدث  
 ✅ Docker Desktop (لخدمة IPFS)
 ✅ MySQL Server (قاعدة البيانات)
@@ -39,10 +39,9 @@
 └─────────────────────────────────────────────────────────────┘
    انقر على: start_backend.bat
    أو يدوياً:
-   cd api
-   python -m venv venv
-   venv\Scripts\activate
-   pip install -r requirements.txt
+   python -m venv .venv
+   .\.venv\Scripts\activate
+   pip install -r requirements.unified.txt
    python -m api.main
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -102,7 +101,7 @@
 ❌ المشكلة: Backend لا يبدأ
    ✅ تأكد من أن Python مثبت
    ✅ تأكد من أن MySQL يعمل
-   ✅ قم بتشغيل: pip install -r requirements.txt
+   ✅ قم بتشغيل: pip install -r requirements.unified.txt
 
 ❌ المشكلة: Dashboard لا يبدأ  
    ✅ تأكد من أن Node.js مثبت

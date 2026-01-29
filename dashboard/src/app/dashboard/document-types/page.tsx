@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -152,8 +153,12 @@ export default function DocumentTypesPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="bg-white shadow p-4 mb-4">
+      <header className="bg-white shadow p-4 mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Manage Document Types</h1>
+        {/* Quick access back to the main admin dashboard. */}
+        <Link href="/dashboard" className="text-sm text-slate-600 hover:text-slate-900">
+          Back to Dashboard
+        </Link>
       </header>
 
       <main className="flex-1 p-6">
