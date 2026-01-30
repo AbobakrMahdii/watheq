@@ -1,0 +1,108 @@
+services:
+
+  # =====================
+  # Orderer
+  # =====================
+  orderer.example.com:
+    image: hyperledger/fabric-orderer:2.5
+    container_name: orderer.example.com
+    restart: unless-stopped
+    environment:
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    volumes:
+      - ../blockchain/network-artifacts/orderer/msp:/var/hyperledger/orderer/msp
+      - ../blockchain/network-artifacts/orderer/tls:/var/hyperledger/orderer/tls
+      - ../blockchain/network-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+    ports:
+      - "7050:7050"
+
+
+  # =====================
+  # CouchDB Org1
+  # =====================
+  couchdb.org1:
+    image: couchdb:3.3
+    container_name: couchdb.org1
+    restart: unless-stopped
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "5984:5984"
+
+
+  # =====================
+  # Peer Org1
+  # =====================
+  peer0.org1.example.com:
+    image: hyperledger/fabric-peer:2.5
+    container_name: peer0.org1.example.com
+    restart: unless-stopped
+    environment:
+      - CORE_PEER_ID=peer0.org1.example.com
+      - CORE_PEER_LOCALMSPID=Org1MSP
+      - CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb.org1:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+
+      - CORE_PEER_TLS_ENABLED=true
+    volumes:
+      - ../blockchain/network-artifacts/org1/msp:/etc/hyperledger/fabric/msp
+      - ../blockchain/network-artifacts/org1/tls:/etc/hyperledger/fabric/tls
+    ports:
+      - "7051:7051"
+    depends_on:
+      - couchdb.org1
+
+
+  # =====================
+  # CouchDB Org2
+  # =====================
+  couchdb.org2:
+    image: couchdb:3.3
+    container_name: couchdb.org2
+    restart: unless-stopped
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "6984:5984"
+
+
+  # =====================
+  # Peer Org2
+  # =====================
+  peer0.org2.example.com:
+    image: hyperledger/fabric-peer:2.5
+    container_name: peer0.org2.example.com
+    restart: unless-stopped
+    environment:
+      - CORE_PEER_ID=peer0.org2.example.com
+      - CORE_PEER_LOCALMSPID=Org2MSP
+      - CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:9051
+
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb.org2:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+
+      - CORE_PEER_TLS_ENABLED=true
+    volumes:
+      - ../blockchain/network-artifacts/org2/msp:/etc/hyperledger/fabric/msp
+      - ../blockchain/network-artifacts/org2/tls:/etc/hyperledger/fabric/tls
+    ports:
+      - "9051:9051"
+    depends_on:
+      - couchdb.org2
