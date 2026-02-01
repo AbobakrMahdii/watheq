@@ -15,14 +15,22 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Send email or username based on what user entered
+      const loginPayload = identifier.includes("@") 
+        ? { email: identifier, password }
+        : { username: identifier, password };
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: identifier, password }),
+        body: JSON.stringify(loginPayload),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Invalid credentials");
+      if (!res.ok) {
+        const errorMessage = data?.message || "Invalid credentials";
+        throw new Error(errorMessage);
+      }
 
       toast.success("Login successful");
       router.push("/dashboard");

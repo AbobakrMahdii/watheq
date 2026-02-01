@@ -14,6 +14,10 @@ class AppSnackbars {
     _show(context, message, background: AppColors.success);
   }
 
+  static void info(BuildContext context, String message) {
+    _show(context, message, background: AppColors.warning);
+  }
+
   static void _show(
     BuildContext context,
     String message, {
@@ -34,4 +38,3 @@ class AppSnackbars {
       ..showSnackBar(snackBar);
   }
 }
-

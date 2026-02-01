@@ -37,6 +37,7 @@ seaborn
 scikit-learn
 PyMuPDF
 deepface
+tf-keras
 databases
 SQLAlchemy
 aiomysql

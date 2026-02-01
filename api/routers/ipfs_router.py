@@ -1,9 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Request
 from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 
 from ledger.ipfs_service import IPFSService
+from api.services.audit_log_service import log_file_event
 
 router = APIRouter(
     prefix="/ipfs",
@@ -30,28 +31,52 @@ def health_check():
         return JSONResponse(status_code=503, content={"available": False, "error": _ipfs_init_error})
 
     try:
-        return {"available": True, "version": ipfs.client.version()}
+        # Using HTTP-based IPFSService (no ipfshttpclient).
+        return {"available": True, "ok": ipfs.healthy()}
     except Exception as e:
         logger.error("IPFS health check failed: %s", e)
         return JSONResponse(status_code=503, content={"available": False, "error": str(e)})
 
 
 @router.post("/pin-file")
-async def pin_file(file: UploadFile = File(...)):
+async def pin_file(request: Request, file: UploadFile = File(...)):
     """Upload a file to IPFS and return CID. Returns 503 if IPFS not available."""
     if ipfs is None:
         raise HTTPException(status_code=503, detail="IPFS service not available")
 
     try:
         data = await file.read()
-        cid = ipfs.client.add_bytes(data)
+        if not data:
+            raise HTTPException(status_code=400, detail="Empty file")
+        cid = ipfs.pin_bytes(data, filename=file.filename or "file")
 
+        request.state.audit_logged = True
+        await log_file_event(
+            request,
+            status="success",
+            operation_type="Upload",
+            module="ipfs",
+            file_name=file.filename,
+            file_size=len(data),
+            file_cid=cid,
+            file_url=f"/api/v1/ipfs/file/{cid}",
+        )
         return {
             "cid": cid,
             "filename": file.filename,
         }
     except Exception as e:
         logger.exception("Failed to pin file to IPFS")
+        request.state.audit_logged = True
+        await log_file_event(
+            request,
+            status="failed",
+            failure_reason=f"IPFS error: {e}",
+            operation_type="Upload",
+            module="ipfs",
+            file_name=file.filename,
+            file_size=len(data) if "data" in locals() and data is not None else None,
+        )
         raise HTTPException(status_code=500, detail=f"IPFS error: {e}")
 
 

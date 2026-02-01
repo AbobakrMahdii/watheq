@@ -1,12 +1,16 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
 import '../../features/auth/services/auth_service.dart';
+import '../../features/verification/models/document_type_model.dart';
+import '../../features/verification/services/document_type_api_service.dart';
 import '../../ui/widgets/app_snackbars.dart';
-import '../camera/camera_screen.dart';
+import '../camera/document_capture_screen.dart';
+import '../camera/selfie_liveness_screen.dart';
+import '../verification/verification_result_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,31 +20,88 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? selectedIdType;
-  File? documentImage;
+  // Document Type related state
+  List<DocumentTypeModel> _documentTypes = [];
+  DocumentTypeModel? _selectedDocumentType;
+  bool _isLoadingDocumentTypes = true;
+  String? _documentTypesError;
+
+  // Image files
+  File? documentImageFront; // For front image
   File? personImage;
+  Map<String, dynamic>? _livenessData;
 
-  final List<String> idTypes = ['الهوية الوطنية', 'جواز السفر', 'رخصة القيادة'];
+  bool _isSubmitting = false;
 
-  bool get isFormComplete =>
-      selectedIdType != null && documentImage != null && personImage != null;
+  @override
+  void initState() {
+    super.initState();
+    _loadDocumentTypes();
+  }
 
-  Future<void> openCamera(bool isDocument) async {
-    final File? result = await Navigator.push(
+  Future<void> _loadDocumentTypes() async {
+    setState(() {
+      _isLoadingDocumentTypes = true;
+      _documentTypesError = null;
+    });
+    try {
+      _documentTypes =
+          await DocumentTypeApiService.instance.getActiveDocumentTypes();
+      if (_documentTypes.isNotEmpty) {
+        _selectedDocumentType = _documentTypes.first;
+      }
+    } catch (e) {
+      _documentTypesError = 'فشل تحميل أنواع الوثائق: ${e.toString()}';
+      if (mounted) {
+        AppSnackbars.error(context, _documentTypesError!);
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingDocumentTypes = false;
+      });
+    }
+  }
+
+  // Updated form completion logic
+  bool get isFormComplete {
+    if (_selectedDocumentType == null ||
+        documentImageFront == null ||
+        personImage == null) {
+      return false;
+    }
+    return true;
+  }
+
+  // Updated openCamera to handle front/person images
+  Future<void> openCamera(String imageType) async {
+    if (imageType == 'front') {
+      final File? result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DocumentCaptureScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+      if (result != null) {
+        setState(() {
+          documentImageFront = result;
+        });
+      }
+      return;
+    }
+
+    final SelfieCaptureResult? result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const CameraScreen(),
+        builder: (_) => const SelfieLivenessScreen(),
         fullscreenDialog: true,
       ),
     );
-
     if (result != null) {
       setState(() {
-        if (isDocument) {
-          documentImage = result;
-        } else {
-          personImage = result;
-        }
+        personImage = result.file;
+        _livenessData = result.livenessData;
       });
     }
   }
@@ -53,8 +114,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _uploadData() {
-    // هنا ربط API لاحقًا
-    AppSnackbars.success(context, 'تم رفع البيانات بنجاح');
+    _openResults();
+  }
+
+  Future<void> _openResults() async {
+    if (_isSubmitting) return;
+    if (!isFormComplete) return;
+
+    final docFront = documentImageFront;
+    final person = personImage;
+    final selectedType = _selectedDocumentType;
+
+    if (docFront == null || person == null || selectedType == null) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerificationResultScreen(
+            documentImageFront: docFront,
+            documentImageBack: null,
+            personImage: person,
+            documentTypeId: selectedType.id,
+            documentTypeName: selectedType.name,
+            livenessData: _livenessData,
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -100,41 +191,58 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 16),
 
                     // نوع الهوية
-                    DropdownButtonFormField<String>(
-                      value: selectedIdType,
-                      decoration: const InputDecoration(
-                        labelText: 'نوع الهوية',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: idTypes
-                          .map(
-                            (e) => DropdownMenuItem(value: e, child: Text(e)),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          selectedIdType = value;
-                        });
-                      },
-                    ),
+                    _isLoadingDocumentTypes
+                        ? const Center(child: CircularProgressIndicator())
+                        : _documentTypesError != null
+                            ? Text(
+                                _documentTypesError!,
+                                style: const TextStyle(color: Colors.red),
+                                textAlign: TextAlign.center,
+                              )
+                            : _documentTypes.isEmpty
+                                ? const Text(
+                                    'لا توجد أنواع وثائق متاحة. يرجى إضافتها من لوحة التحكم.',
+                                    textAlign: TextAlign.center,
+                                  )
+                                : DropdownButtonFormField<DocumentTypeModel>(
+                                    // ignore: deprecated_member_use
+                                    value: _selectedDocumentType,
+                                    decoration: const InputDecoration(
+                                      labelText: 'نوع الهوية',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: _documentTypes
+                                        .map(
+                                          (docType) => DropdownMenuItem(
+                                            value: docType,
+                                            child: Text(docType.name),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedDocumentType = value;
+                                      });
+                                    },
+                                  ),
 
                     const SizedBox(height: 16),
 
-                    // تصوير الوثيقة
+                    // تصوير الوثيقة الأمامية
                     ElevatedButton(
-                      onPressed: () => openCamera(true),
-                      child: const Text('صورة الوثيقة'),
+                      onPressed: () => openCamera('front'),
+                      child: const Text('صورة الوثيقة الأمامية'),
                     ),
-                    if (documentImage != null) ...[
+                    if (documentImageFront != null) ...[
                       const SizedBox(height: 8),
-                      Image.file(documentImage!, height: 120),
+                      Image.file(documentImageFront!, height: 120),
                     ],
 
                     const SizedBox(height: 16),
 
                     // تصوير الشخص
                     ElevatedButton(
-                      onPressed: () => openCamera(false),
+                      onPressed: () => openCamera('person'),
                       child: const Text('صورة الشخص'),
                     ),
                     if (personImage != null) ...[
@@ -146,11 +254,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     // زر الرفع
                     ElevatedButton(
-                      onPressed: isFormComplete ? _uploadData : null,
+                      onPressed:
+                          isFormComplete && !_isSubmitting ? _uploadData : null,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(14),
                       ),
-                      child: const Text('رفع'),
+                      child: Text(
+                        _isSubmitting ? 'جاري الرفع...' : 'رفع',
+                      ),
                     ),
                   ],
                 ),
