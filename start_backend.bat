@@ -24,13 +24,13 @@ if errorlevel 1 (
 
 REM Create .venv if it doesn't exist
 if not exist "%PYTHON_EXE%" (
-    echo Creating virtual environment (.venv)...
+    echo Creating virtual environment .venv...
     py -3.11 -m venv "%VENV_DIR%"
 )
 
 REM Install dependencies only if needed
 if not exist "%VENV_DIR%\Lib\site-packages\fastapi" (
-    echo Installing dependencies (one-time)...
+    echo Installing dependencies - one-time...
     if exist "%REQ_UNIFIED%" (
         "%PIP_EXE%" install -r "%REQ_UNIFIED%"
     ) else (

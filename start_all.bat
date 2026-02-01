@@ -32,8 +32,8 @@ echo ========================================
 echo.
 echo Services:
 echo   - IPFS:        http://localhost:5001 (API), http://localhost:8081 (Gateway)
-echo   - Backend API: http://localhost:8001
-echo   - API Docs:    http://localhost:8001/api/v1/docs
+echo   - Backend API: http://localhost:8010
+echo   - API Docs:    http://localhost:8010/api/v1/docs
 echo   - Dashboard:   http://localhost:3000
 echo.
 echo Press any key to close this window (services will keep running)...

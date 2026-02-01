@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.database import get_user_collection
+from api.database import get_user_collection, database
 from ..models import UserCreate
 from ..security import get_current_admin, get_current_super_admin
 from ..security import get_password_hash
@@ -127,3 +127,32 @@ async def remove_admin(
     )
 
     return {"message": "Admin removed"}
+
+# =========================
+# Analytics summary (admin + super)
+# =========================
+@router.get("/analytics")
+async def get_analytics(admin=Depends(get_current_admin)):
+    if not database.is_connected:
+        await database.connect()
+
+    async def _count(query: str, values: dict | None = None) -> int:
+        row = await database.fetch_one(query, values=values)
+        return int(row["total"]) if row else 0
+
+    total_users = await _count("SELECT COUNT(*) as total FROM users WHERE role = 'user'")
+    total_admins = await _count(
+        "SELECT COUNT(*) as total FROM users WHERE role IN ('admin','super_admin')"
+    )
+    total_verifications = await _count("SELECT COUNT(*) as total FROM verifications")
+    total_document_types = await _count("SELECT COUNT(*) as total FROM document_types")
+    total_audit_logs = await _count("SELECT COUNT(*) as total FROM audit_logs")
+
+    return {
+        "total_users": total_users,
+        "total_admins": total_admins,
+        "total_verifications": total_verifications,
+        "total_authentications": total_verifications,
+        "total_document_types": total_document_types,
+        "total_audit_logs": total_audit_logs,
+    }

@@ -1,4 +1,4 @@
-# app
+# watheeq_app
 
 A new Flutter project.
 

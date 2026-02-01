@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 from .config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 pwd_context = CryptContext(
-    schemes=["bcrypt_sha256", "bcrypt"],
+    schemes=["pbkdf2_sha256"],
     deprecated="auto",
 )
 
@@ -19,11 +19,9 @@ oauth2_scheme = OAuth2PasswordBearer(
 # Password helpers
 # =========================
 def get_password_hash(password: str) -> str:
-    password = password[:72]
     return pwd_context.hash(password)
 
 def verify_password(password: str, hashed: str) -> bool:
-    password = password[:72]
     return pwd_context.verify(password, hashed)
 
 # =========================
