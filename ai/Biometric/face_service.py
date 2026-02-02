@@ -1,11 +1,10 @@
-
 import numpy as np
 import cv2
 from typing import Dict
 #athhh
 
 class FaceService:
-    def __init__(self, model_name: str = "Facenet", distance_metric: str = "cosine", threshold: float = 0.7):
+    def init(self, model_name: str = "Facenet", distance_metric: str = "cosine", threshold: float = 0.7):
         self.model_name = model_name
         self.distance_metric = distance_metric
         self.threshold = threshold
@@ -26,7 +25,7 @@ class FaceService:
         except Exception as e:
             raise RuntimeError(
                 "DeepFace is not ready on the server. "
-                "If you are using TensorFlow 2.20+, install `tf-keras` (pip install tf-keras)."
+                "If you are using TensorFlow 2.20+, install tf-keras (pip install tf-keras)."
             ) from e
 
         try:
@@ -39,7 +38,7 @@ class FaceService:
             )
         except Exception as e:
             raise RuntimeError(
-                f"DeepFace.verify failed ({type(e).__name__}). "
+                f"DeepFace.verify failed ({type(e).name}). "
                 "This can happen if no face is detectable in the document photo, "
                 "or if DeepFace dependencies/models are not ready on the server."
             ) from e
