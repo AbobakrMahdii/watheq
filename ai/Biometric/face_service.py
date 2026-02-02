@@ -15,7 +15,7 @@ class FaceService:
         self.threshold = threshold
 
     # ========================
-    # Utils
+    # UtilsS
     # ========================
     def _bytes_to_image(self, data: bytes):
         nparr = np.frombuffer(data, np.uint8)
