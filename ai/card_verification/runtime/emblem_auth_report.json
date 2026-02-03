@@ -1,0 +1,24 @@
+{
+  "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+  "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+  "ref_image": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\refs\\emblem.png",
+  "roi_pixels": {
+    "emblem": [
+      265,
+      55,
+      429,
+      143
+    ]
+  },
+  "scores": {
+    "best_template_score": 0.898448,
+    "orb_ratio": 0.448936,
+    "good_matches": 211,
+    "best_scale": 0.95
+  },
+  "decision": "EMBLEM_AUTHENTIC",
+  "reasons": [
+    "template_score strong",
+    "orb_ratio strong"
+  ]
+}

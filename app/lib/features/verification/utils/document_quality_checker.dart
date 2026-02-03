@@ -21,14 +21,14 @@ class DocumentQualityResult {
   final double edgeScore;
   final String? message;
 
-  bool get isValid => isBrightnessOk && isBlurOk && isEdgeOk;
+  bool get isValid => isBrightnessOk && isBlurOk;
 }
 
 class DocumentQualityChecker {
-  static const double brightnessMin = 40;
-  static const double brightnessMax = 220;
-  static const double blurMin = 70;
-  static const double edgeMin = 0.06;
+  static const double brightnessMin = 30;
+  static const double brightnessMax = 235;
+  static const double blurMin = 45;
+  static const double edgeMin = 0.02;
 
   static DocumentQualityResult check(File file) {
     final bytes = file.readAsBytesSync();
@@ -129,7 +129,7 @@ class DocumentQualityChecker {
         final py = img.getLuminance(image.getPixel(x, y + 1));
         final dx = (px - p).abs();
         final dy = (py - p).abs();
-        if (dx + dy > 40) edges++;
+        if (dx + dy > 30) edges++;
         total++;
       }
     }

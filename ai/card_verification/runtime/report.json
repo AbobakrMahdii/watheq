@@ -1,0 +1,53 @@
+{
+  "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+  "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+  "template": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\layout.yaml",
+  "layout_status": "PASS",
+  "reason": null,
+  "stamp": {
+    "blue_area_pct": 0.01304,
+    "centroid_xy": [
+      61,
+      277
+    ],
+    "in_expected": true,
+    "status": "STAMP_OK"
+  },
+  "name_text": {
+    "ink_ratio": 0.239102,
+    "status": "OK"
+  },
+  "national_id_number": {
+    "ink_ratio": 0.127878,
+    "status": "OK"
+  },
+  "roi_pixels": {
+    "stamp_under_photo_band": [
+      8,
+      200,
+      275,
+      337
+    ],
+    "stamp_expected": [
+      49,
+      209,
+      259,
+      328
+    ],
+    "name_text": [
+      259,
+      237,
+      745,
+      291
+    ],
+    "national_id_number": [
+      324,
+      200,
+      648,
+      237
+    ]
+  },
+  "artifacts": {
+    "photo_crop": "ai\\card_verification\\runtime\\photo_crop.png"
+  }
+}

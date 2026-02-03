@@ -21,6 +21,7 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
   CameraController? _controller;
   bool _isLoading = true;
   bool _isProcessing = false;
+  String? _error;
 
   @override
   void initState() {
@@ -30,7 +31,13 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
 
   Future<void> _initCamera() async {
     try {
+      await _controller?.dispose();
+      _controller = null;
       final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        _error = 'لا توجد كاميرا متاحة على هذا الجهاز';
+        return;
+      }
       final backCamera = cameras.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
@@ -42,6 +49,7 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
       );
       await _controller!.initialize();
     } catch (e) {
+      _error = 'تعذّر تشغيل الكاميرا، تأكد من الإذن';
       debugPrint('Camera error: $e');
     }
 
@@ -113,6 +121,34 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('التقاط الوثيقة')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _error = null;
+                    });
+                    _initCamera();
+                  },
+                  child: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (_isLoading || _controller == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

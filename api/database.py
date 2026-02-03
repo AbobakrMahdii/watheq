@@ -150,7 +150,7 @@ class DocumentTypesCollection:
             return dict(row) if row else None
         return None
 
-    async def find(self, filt: Dict[str, Any] = None) -> list[Dict[str, Any]]:
+    async def find(self, filt: Optional[Dict[str, Any]] = None) -> list[Dict[str, Any]]:
         await self._ensure_connected()
         query_parts = []
         values = {}

@@ -1,0 +1,22 @@
+{
+  "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+  "ref_image": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\refs\\emblem.png",
+  "roi_pixels": {
+    "emblem": [
+      265,
+      131,
+      429,
+      339
+    ]
+  },
+  "scores": {
+    "best_template_score": 0.087858,
+    "orb_ratio": 0.0,
+    "good_matches": 0,
+    "best_scale": 0.8
+  },
+  "decision": "EMBLEM_FORGED",
+  "reasons": [
+    "low template_score or orb_ratio"
+  ]
+}

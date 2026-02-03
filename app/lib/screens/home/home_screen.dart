@@ -94,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final SelfieCaptureResult? result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const SelfieLivenessScreen(),
+        builder: (_) => const SelfieLivenessScreen(useFrontCamera: true),
         fullscreenDialog: true,
       ),
     );

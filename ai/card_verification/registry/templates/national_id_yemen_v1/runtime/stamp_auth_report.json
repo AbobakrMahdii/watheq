@@ -1,0 +1,22 @@
+{
+  "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+  "ref_image": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\refs\\stamp.png",
+  "roi_pixels": {
+    "stamp_expected": [
+      49,
+      497,
+      259,
+      778
+    ]
+  },
+  "blue_area_pct": 0.008948,
+  "scores": {
+    "template_score": 0.605381,
+    "orb_ratio": 0.473684,
+    "good_matches": 9
+  },
+  "decision": "STAMP_AUTHENTIC",
+  "reasons": [
+    "strong ORB match"
+  ]
+}

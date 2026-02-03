@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
+from passlib.exc import UnknownHashError
 
 from api.database import get_user_collection
 from ..models import UserCreate
@@ -67,7 +68,21 @@ async def login(request: Request):
         user = await users.find_one({"username": identifier})
         user = user or await users.find_one({"email": identifier})
 
-    if not user or not verify_password(password, user["password"]):
+    valid_password = False
+    if user:
+        try:
+            valid_password = verify_password(password, user["password"])
+        except UnknownHashError:
+            # Fallback for legacy/plaintext passwords
+            if isinstance(user.get("password"), str) and user["password"] == password:
+                valid_password = True
+                try:
+                    new_hash = get_password_hash(password)
+                    await users.update_one({"_id": user["_id"]}, {"$set": {"password": new_hash}})
+                except Exception:
+                    pass
+
+    if not user or not valid_password:
         await log_auth_event(
             request,
             operation_type="Login",

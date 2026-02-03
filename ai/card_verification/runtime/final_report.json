@@ -1,0 +1,158 @@
+{
+  "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+  "template": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\layout.yaml",
+  "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+  "rectification": {
+    "status": "RECTIFIED_FALLBACK",
+    "method": "fallback_bbox",
+    "corners": [
+      [
+        0,
+        326
+      ],
+      [
+        809,
+        326
+      ],
+      [
+        809,
+        780
+      ],
+      [
+        0,
+        780
+      ]
+    ],
+    "original_size": {
+      "width": 810,
+      "height": 1080
+    },
+    "rectified_size": {
+      "width": 810,
+      "height": 455
+    },
+    "aspect_ratio": 1.78022,
+    "confidence": 0.4
+  },
+  "layout": {
+    "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+    "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+    "template": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\layout.yaml",
+    "layout_status": "PASS",
+    "reason": null,
+    "stamp": {
+      "blue_area_pct": 0.01304,
+      "centroid_xy": [
+        61,
+        277
+      ],
+      "in_expected": true,
+      "status": "STAMP_OK"
+    },
+    "name_text": {
+      "ink_ratio": 0.239102,
+      "status": "OK"
+    },
+    "national_id_number": {
+      "ink_ratio": 0.127878,
+      "status": "OK"
+    },
+    "roi_pixels": {
+      "stamp_under_photo_band": [
+        8,
+        200,
+        275,
+        337
+      ],
+      "stamp_expected": [
+        49,
+        209,
+        259,
+        328
+      ],
+      "name_text": [
+        259,
+        237,
+        745,
+        291
+      ],
+      "national_id_number": [
+        324,
+        200,
+        648,
+        237
+      ]
+    },
+    "artifacts": {
+      "photo_crop": "ai\\card_verification\\runtime\\photo_crop.png"
+    }
+  },
+  "stamp": {
+    "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+    "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+    "ref_image": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\refs\\stamp.png",
+    "roi_pixels": {
+      "stamp_expected": [
+        49,
+        209,
+        259,
+        328
+      ]
+    },
+    "blue_area_pct": 0.021128,
+    "scores": {
+      "template_score": 0.605381,
+      "orb_ratio": 0.473684,
+      "good_matches": 9
+    },
+    "decision": "STAMP_AUTHENTIC",
+    "reasons": [
+      "strong ORB match"
+    ]
+  },
+  "emblem": {
+    "input_image": "C:\\Users\\sadeq\\Downloads\\WhatsApp Image 2026-02-02 at 10.13.16 AM.jpeg",
+    "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+    "ref_image": "ai\\card_verification\\registry\\templates\\national_id_yemen_v1\\refs\\emblem.png",
+    "roi_pixels": {
+      "emblem": [
+        265,
+        55,
+        429,
+        143
+      ]
+    },
+    "scores": {
+      "best_template_score": 0.898448,
+      "orb_ratio": 0.448936,
+      "good_matches": 211,
+      "best_scale": 0.95
+    },
+    "decision": "EMBLEM_AUTHENTIC",
+    "reasons": [
+      "template_score strong",
+      "orb_ratio strong"
+    ]
+  },
+  "face": null,
+  "final_decision": "VERIFIED_OK",
+  "reasons": [],
+  "artifacts": {
+    "rectified_image": "ai\\card_verification\\runtime\\card_rectified.png",
+    "rectification_report": "ai\\card_verification\\runtime\\rectification_report.json",
+    "layout_report": "ai\\card_verification\\runtime\\report.json",
+    "layout_overlay": "ai\\card_verification\\runtime\\overlay_layout_verify.png",
+    "layout_stamp_mask": "ai\\card_verification\\runtime\\stamp_mask.png",
+    "photo_crop": "ai\\card_verification\\runtime\\photo_crop.png",
+    "stamp_report": "ai\\card_verification\\runtime\\stamp_auth_report.json",
+    "stamp_crop": "ai\\card_verification\\runtime\\stamp_crop.png",
+    "stamp_ref": "ai\\card_verification\\runtime\\stamp_ref.png",
+    "stamp_mask": "ai\\card_verification\\runtime\\stamp_mask.png",
+    "stamp_match_vis": "ai\\card_verification\\runtime\\stamp_match_vis.png",
+    "emblem_report": "ai\\card_verification\\runtime\\emblem_auth_report.json",
+    "emblem_crop": "ai\\card_verification\\runtime\\emblem_crop.png",
+    "emblem_ref": "ai\\card_verification\\runtime\\emblem_ref.png",
+    "emblem_match_vis": "ai\\card_verification\\runtime\\emblem_match_vis.png",
+    "emblem_overlay": "ai\\card_verification\\runtime\\overlay_emblem.png"
+  }
+}
