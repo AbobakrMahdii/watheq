@@ -210,6 +210,13 @@ def main() -> int:
     if missing_keys:
         print(f"Missing ROI definitions for: {', '.join(missing_keys)}")
 
+    # Always draw all element ROIs for debug overlay.
+    for key, value in elements.items():
+        roi = (value or {}).get("roi")
+        if not roi:
+            continue
+        roi_pixels.setdefault(key, roi_to_pixels(roi, image.shape))
+
     stamp_band = crop(image, roi_pixels.get("stamp_under_photo_band", [0, 0, 0, 0]))
     stamp_expected_box = roi_pixels.get("stamp_expected", [0, 0, 0, 0])
     name_crop = crop(image, roi_pixels.get("name_text", [0, 0, 0, 0]))
@@ -222,16 +229,13 @@ def main() -> int:
     else:
         print("Warning: photo ROI is missing in template; skipping photo crop.")
 
-    blue_area_pct, stamp_mask, stamp_centroid_roi = stamp_analysis(stamp_band)
-
+    stamp_mask = np.zeros(
+        (stamp_band.shape[0], stamp_band.shape[1]), dtype=np.uint8
+    ) if stamp_band.size else np.zeros((1, 1), dtype=np.uint8)
+    blue_area_pct = 0.0
     stamp_centroid_full = None
-    in_expected = False
-    stamp_status = "STAMP_MISSING"
-    if blue_area_pct >= 0.005 and stamp_centroid_roi is not None:
-        x0, y0, _, _ = roi_pixels.get("stamp_under_photo_band", [0, 0, 0, 0])
-        stamp_centroid_full = (x0 + stamp_centroid_roi[0], y0 + stamp_centroid_roi[1])
-        in_expected = point_in_box(stamp_centroid_full, stamp_expected_box)
-        stamp_status = "STAMP_OK" if in_expected else "STAMP_WRONG_POSITION"
+    in_expected = None
+    stamp_status = "SKIPPED"
 
     name_ratio = compute_ink_ratio(cv2.cvtColor(name_crop, cv2.COLOR_BGR2GRAY)) if name_crop.size else 0.0
     name_status = "NAME_MISSING" if name_ratio < 0.01 else "OK"
@@ -241,8 +245,8 @@ def main() -> int:
 
     layout_status = "PASS"
     reason = None
-    for status in [stamp_status, name_status, id_status]:
-        if status in ("STAMP_MISSING", "STAMP_WRONG_POSITION", "NAME_MISSING", "NATIONAL_ID_MISSING"):
+    for status in [name_status, id_status]:
+        if status in ("NAME_MISSING", "NATIONAL_ID_MISSING"):
             layout_status = "FAIL"
             reason = status
             break

@@ -67,12 +67,20 @@ def document_image_quality(document_front: Path) -> dict[str, Any]:
 
     ok_brightness = QUALITY_BRIGHTNESS_MIN <= brightness <= QUALITY_BRIGHTNESS_MAX
     ok_blur = blur_score >= QUALITY_BLUR_MIN
+    reason_code = None
+    if brightness < QUALITY_BRIGHTNESS_MIN:
+        reason_code = "LOW_BRIGHTNESS"
+    elif brightness > QUALITY_BRIGHTNESS_MAX:
+        reason_code = "HIGH_BRIGHTNESS"
+    elif blur_score < QUALITY_BLUR_MIN:
+        reason_code = "BLURRY"
 
     return {
         "brightness": brightness,
         "blur_score": blur_score,
         "brightness_ok": ok_brightness,
         "blur_ok": ok_blur,
+        "reason_code": reason_code,
         "message": None,
     }
 
@@ -82,58 +90,60 @@ def document_crop(document_front: Path, output_path: Path) -> dict[str, Any]:
     if image is None:
         raise RuntimeError("Invalid document image")
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blur, 50, 150)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        raise RuntimeError("Document edges not found")
+    print(f"IN: {image.shape[1]}x{image.shape[0]}")
 
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)
-    doc_contour = None
-    img_area = float(image.shape[0] * image.shape[1])
+    import subprocess
+    import sys
+    import tempfile
+    import shutil
 
-    for c in contours:
-        peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-        if len(approx) == 4:
-            area_ratio = cv2.contourArea(approx) / img_area
-            if QUALITY_MIN_AREA_RATIO <= area_ratio <= QUALITY_MAX_AREA_RATIO:
-                doc_contour = approx
-                break
-
-    if doc_contour is None:
-        raise RuntimeError("Document contour not detected")
-
-    pts = doc_contour.reshape(4, 2).astype("float32")
-    rect = _order_points(pts)
-    (tl, tr, br, bl) = rect
-
-    widthA = np.linalg.norm(br - bl)
-    widthB = np.linalg.norm(tr - tl)
-    maxWidth = int(max(widthA, widthB))
-
-    heightA = np.linalg.norm(tr - br)
-    heightB = np.linalg.norm(tl - bl)
-    maxHeight = int(max(heightA, heightB))
-
-    dst = np.array(
-        [[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]],
-        dtype="float32",
-    )
-
-    matrix = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(image, matrix, (maxWidth, maxHeight))
+    repo_root = Path(__file__).resolve().parents[2]
+    rectify_script = repo_root / "ai" / "card_verification" / "detect_and_rectify_card.py"
+    if not rectify_script.exists():
+        raise RuntimeError("detect_and_rectify_card.py not found")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(output_path), warped)
+    with tempfile.TemporaryDirectory(dir=str(output_path.parent), prefix="rectify_run_") as tmpdir:
+        tmp_out = Path(tmpdir)
+        cmd = [
+            sys.executable,
+            str(rectify_script),
+            "--image",
+            str(document_front),
+            "--out_dir",
+            str(tmp_out),
+        ]
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if proc.returncode != 0:
+            reason = "NO_CARD_QUAD"
+            combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
+            if "BAD_RECTIFIED" in combined:
+                reason = "BAD_RECTIFIED"
+            print(f"DOCUMENT_CROPPING: FAILED reason={reason}")
+            raise RuntimeError(reason)
 
-    aspect_ratio = maxWidth / maxHeight if maxHeight else 0
+        rectified = tmp_out / "card_rectified.png"
+        if not rectified.exists():
+            print("DOCUMENT_CROPPING: FAILED reason=BAD_RECTIFIED")
+            raise RuntimeError("BAD_RECTIFIED")
+
+        shutil.copyfile(rectified, output_path)
+
+    rectified_img = cv2.imdecode(np.fromfile(output_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if rectified_img is None:
+        print("DOCUMENT_CROPPING: FAILED reason=BAD_RECTIFIED")
+        raise RuntimeError("BAD_RECTIFIED")
+
+    print(f"RECT: {rectified_img.shape[1]}x{rectified_img.shape[0]}")
+    print("DOCUMENT_CROPPING: PASS method=rectify_warp size=856x540")
     return {
         "cropped_path": str(output_path),
-        "aspect_ratio": aspect_ratio,
-        "width": maxWidth,
-        "height": maxHeight,
+        "rectified_path": str(output_path),
     }
 
 
@@ -142,21 +152,76 @@ def document_face_extraction(cropped_path: Path, output_path: Path) -> dict[str,
     if image is None:
         raise RuntimeError("Invalid cropped document image")
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
-    if faces is None or len(faces) == 0:
-        raise RuntimeError("No face detected in document")
+    repo_root = Path(__file__).resolve().parents[2]
+    template_path = (
+        repo_root
+        / "ai"
+        / "card_verification"
+        / "registry"
+        / "templates"
+        / "national_id_yemen_v1"
+        / "layout.yaml"
+    )
+    layout_report = cropped_path.parent / "layout" / "report.json"
+    if not layout_report.exists():
+        raise RuntimeError("Layout report missing; run layout verification first")
+    if not template_path.exists():
+        raise RuntimeError("Layout template not found for national_id_yemen_v1")
 
-    x, y, w, h = faces[0]
-    face = image[y : y + h, x : x + w]
+    try:
+        report = json.loads(layout_report.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError("Failed to read layout report") from exc
+
+    if (report.get("layout_status") or "").upper() != "PASS":
+        raise RuntimeError("Layout verification did not pass")
+
+    try:
+        template = json.loads(template_path.read_text(encoding="utf-8"))
+    except Exception:
+        template = None
+
+    if template is None:
+        import yaml
+
+        with open(template_path, "r", encoding="utf-8") as f:
+            template = yaml.safe_load(f)
+
+    roi = (template.get("elements") or {}).get("photo", {}).get("roi")
+    if not roi:
+        raise RuntimeError("Photo ROI missing in template")
+
+    h, w = image.shape[:2]
+    x0 = int(round(roi["x"] * w))
+    y0 = int(round(roi["y"] * h))
+    x1 = int(round((roi["x"] + roi["w"]) * w))
+    y1 = int(round((roi["y"] + roi["h"]) * h))
+
+    x0 = max(0, min(x0, w))
+    y0 = max(0, min(y0, h))
+    x1 = max(0, min(x1, w))
+    y1 = max(0, min(y1, h))
+    if x1 < x0:
+        x0, x1 = x1, x0
+    if y1 < y0:
+        y0, y1 = y1, y0
+
+    if x1 <= x0 or y1 <= y0:
+        raise RuntimeError("Photo ROI produced empty crop")
+
+    face = image[y0:y1, x0:x1].copy()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(output_path), face)
 
     return {
         "document_face_path": str(output_path),
-        "box": {"x": int(x), "y": int(y), "w": int(w), "h": int(h)},
+        "source": "layout_roi",
+        "roi": {
+            "x": float(roi["x"]),
+            "y": float(roi["y"]),
+            "w": float(roi["w"]),
+            "h": float(roi["h"]),
+        },
     }
 
 
@@ -183,6 +248,71 @@ def face_matching(document_face_path: Path, person_image: Path) -> dict[str, Any
     service = FaceService()
     result = service.verify_faces(document_face_path.read_bytes(), person_image.read_bytes())
     return result
+
+
+def layout_gating_verify(rectified_image: Path) -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[2]
+    layout_script = repo_root / "ai" / "card_verification" / "layout_verify.py"
+    template_path = (
+        repo_root
+        / "ai"
+        / "card_verification"
+        / "registry"
+        / "templates"
+        / "national_id_yemen_v1"
+        / "layout.yaml"
+    )
+    if not layout_script.exists():
+        raise RuntimeError("ai/card_verification/layout_verify.py not found")
+    if not template_path.exists():
+        raise RuntimeError("layout.yaml not found for national_id_yemen_v1")
+
+    import subprocess
+    import sys
+
+    out_dir = rectified_image.parent / "layout"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        str(layout_script),
+        "--image",
+        str(rectified_image),
+        "--rectified",
+        str(rectified_image),
+        "--template",
+        str(template_path),
+        "--out_dir",
+        str(out_dir),
+    ]
+    proc = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Layout verify failed (exit {proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
+        )
+
+    report_path = out_dir / "report.json"
+    if not report_path.exists():
+        raise RuntimeError("Layout report not generated")
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    layout_status = report.get("layout_status") or "FAIL"
+    reason = report.get("reason")
+
+    return {
+        "layout_status": layout_status,
+        "reason": reason,
+        "artifacts": {
+            "report_json": str(report_path),
+            "overlay_png": str(out_dir / "overlay_layout_verify.png"),
+            "stamp_mask_png": str(out_dir / "stamp_mask.png"),
+        },
+    }
 
 
 def ml_verify(document_front: Path) -> dict[str, Any]:

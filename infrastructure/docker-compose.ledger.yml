@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "4001:4001" # Swarm
+      - "14001:4001" # Swarm
       - "5001:5001" # API
       - "8081:8080" # Gateway
 

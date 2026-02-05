@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form
+import cv2
+import numpy as np
 
 from api.database import get_verifications_collection, get_verification_steps_collection
 from api.models import VerificationPublic, VerificationStepPublic, VerificationStatus
@@ -51,7 +53,19 @@ async def start_verification(
     )
 
     storage_dir = Path(__file__).resolve().parents[2] / "storage" / "verifications" / str(verification_id)
-    front_path = _save_upload(document_image_front, storage_dir, "document_front")
+    debug_dir = storage_dir / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    front_bytes = document_image_front.file.read()
+    front_path = storage_dir / "document_front"
+    front_path.write_bytes(front_bytes)
+    image = cv2.imdecode(np.frombuffer(front_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(status_code=400, detail="Invalid document image")
+    print(f"[SERVER] received shape: {image.shape[1]}x{image.shape[0]}")
+    print(f"[SERVER] received bytes: {len(front_bytes)}")
+    cv2.imwrite(str(debug_dir / "input.jpg"), image)
+    cv2.imwrite(str(debug_dir / "server_received.jpg"), image)
     person_path = _save_upload(person_image, storage_dir, "person_image")
     back_path = None
     if document_image_back is not None:

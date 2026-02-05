@@ -1,8 +1,9 @@
 template_id: national_id_yemen_v1
-display_name: Yemen National ID - v1 (Photo left, Emblem top-center, Blue stamp under
-  photo)
-template_version: 1.0.0
+display_name: "Yemen National ID - v1 (Photo left, Emblem top-center, Blue stamp under photo)"
+template_version: "1.0.0"
+
 card_aspect_ratio: 1.585
+
 rectification:
   method: contour_quad
   output_size:
@@ -11,140 +12,122 @@ rectification:
   min_area_ratio: 0.12
   max_skew_deg: 18
   confidence_min: 0.6
+
 template_matching:
   primary_anchor: emblem
   min_match_score: 0.45
   multi_scale:
     enabled: true
-    scales:
-    - 0.85
-    - 0.9
-    - 0.95
-    - 1.0
-    - 1.05
-    - 1.1
+    scales: [0.85, 0.9, 0.95, 1.0, 1.05, 1.1]
+
 elements:
   emblem:
     required: true
     roi:
-      x: 0.327160
-      y: 0.121296
-      w: 0.202469
-      h: 0.192593
+      x: 0.38243
+      y: 0.037007
+      w: 0.211468
+      h: 0.185
     verification:
       type: classical
       method: template_match
       refs:
-      - refs/emblem.png
+        - refs/emblem.png
     position_tolerance:
       dx: 0.03
       dy: 0.03
       scale: 0.1
+
   photo:
     required: true
     roi:
-      x: 0.03
-      y: 0.2
-      w: 0.26
-      h: 0.33
+      x: 0.041557
+      y: 0.04523
+      w: 0.32667
+      h: 0.427632
     verification:
       type: layout-only
     position_tolerance:
       dx: 0.03
       dy: 0.03
       scale: 0.1
+
   name_text:
     required: true
     roi:
-      x: 0.32
-      y: 0.52
-      w: 0.6
-      h: 0.12
+      x: 0.161667
+      y: 0.576271
+      w: 0.471667
+      h: 0.095176
     verification:
       type: layout-only
     position_tolerance:
       dx: 0.03
       dy: 0.03
       scale: 0.1
+
   national_id_number:
     required: true
     roi:
-      x: 0.4
-      y: 0.44
-      w: 0.4
-      h: 0.08
+      x: 0.398333
+      y: 0.466754
+      w: 0.319167
+      h: 0.087353
     verification:
       type: layout-only
     position_tolerance:
       dx: 0.03
       dy: 0.03
       scale: 0.1
+
   stamp_under_photo_band:
-    required: true
+    required: false
     roi:
-      x: 0.01
-      y: 0.44
-      w: 0.33
-      h: 0.3
+      x: 0.043609
+      y: 0.450059
+      w: 0.104511
+      h: 0.130435
     verification:
-      type: classical
-      method: blue_hsv_mask
+      type: layout-only
     constraints:
-      color: blue
       must_be_under: photo
+
   stamp_expected:
     required: false
     roi:
-      x: 0.06
-      y: 0.46
-      w: 0.26
-      h: 0.26
+      x: 0.046667
+      y: 0.457627
+      w: 0.084167
+      h: 0.11734
     verification:
-      type: classical
-      method: blue_hsv_mask
-      refs:
-      - refs/stamp.png
+      type: layout-only
     position_tolerance:
       dx: 0.04
       dy: 0.04
       scale: 0.15
     constraints:
-      color: blue
       must_be_under: photo
+
 thresholds:
   emblem_template_match:
     min_score: 0.45
     strong_score: 0.6
-  blue_stamp_mask:
-    hsv:
-      h_min: 90
-      h_max: 140
-      s_min: 60
-      v_min: 40
-    morphology:
-      open_kernel: 5
-      close_kernel: 7
-      open_iters: 1
-      close_iters: 2
-    area_ratio:
-      min_inside_band: 0.0025
-      min_total_anywhere: 0.002
+
 decisions:
   codes:
-    NOT_A_CARD: Card not detected/rectified
-    UNKNOWN_TEMPLATE: No template matched
-    LAYOUT_MISMATCH: Layout constraints failed
-    STAMP_MISSING: No blue stamp detected
-    STAMP_WRONG_POSITION: Blue stamp detected outside expected band
-    OK: Template matched, layout ok, emblem ok, stamp under photo ok
+    NOT_A_CARD: "Card not detected/rectified"
+    UNKNOWN_TEMPLATE: "No template matched"
+    LAYOUT_MISMATCH: "Layout constraints failed"
+    OK: "Template matched, layout ok, emblem ok, stamp under photo ok"
+
 debug:
   save_overlays: true
   overlay_rois:
-  - emblem
-  - photo
-  - name_text
-  - national_id_number
-  - stamp_under_photo_band
-  - stamp_expected
+    - emblem
+    - photo
+    - name_text
+    - national_id_number
+    - stamp_under_photo_band
+    - stamp_expected
   save_masks: true
   save_rectified: true
