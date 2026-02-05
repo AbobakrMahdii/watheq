@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: ipfs-node
+    restart: unless-stopped
+
+    ports:
+      - "4001:4001" # Swarm
+      - "5001:5001" # API
+      - "8080:8080" # Gateway
+
+    volumes:
+      - ipfs_data:/data/ipfs
+
+    environment:
+      IPFS_PROFILE: server
+
+    command: [ "daemon", "--migrate=true" ]
+
+volumes:
+  ipfs_data:

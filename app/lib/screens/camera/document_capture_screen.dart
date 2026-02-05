@@ -96,7 +96,10 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
   }
 
   Future<void> _pickPdf() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
     if (result == null || result.files.isEmpty) return;
 
     final path = result.files.first.path;
@@ -105,12 +108,16 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
     try {
       final doc = await PdfDocument.openFile(path);
       final page = await doc.getPage(1);
-      final pageImage = await page.render(width: page.width, height: page.height);
+      final pageImage = await page.render(
+        width: page.width,
+        height: page.height,
+      );
       await page.close();
       await doc.close();
 
       final tempDir = await getTemporaryDirectory();
-      final filePath = '${tempDir.path}/document_import_${DateTime.now().millisecondsSinceEpoch}.png';
+      final filePath =
+          '${tempDir.path}/document_import_${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File(filePath);
       await file.writeAsBytes(pageImage!.bytes);
       await _handleFile(file);

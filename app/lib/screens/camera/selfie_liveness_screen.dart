@@ -76,8 +76,9 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
         selectedCamera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup:
-            Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
       );
       await _controller!.initialize();
       _faceDetector = FaceDetector(
@@ -192,7 +193,9 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
     if (_controller == null) return;
     await _stopImageStreamSafely();
     final photo = await _controller!.takePicture();
-    final duration = DateTime.now().difference(_startTime ?? DateTime.now()).inMilliseconds;
+    final duration = DateTime.now()
+        .difference(_startTime ?? DateTime.now())
+        .inMilliseconds;
     final result = SelfieCaptureResult(
       file: File(photo.path),
       livenessData: {
@@ -207,7 +210,10 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
     Navigator.pop(context, result);
   }
 
-  InputImage? _inputImageFromCamera(CameraImage image, CameraDescription camera) {
+  InputImage? _inputImageFromCamera(
+    CameraImage image,
+    CameraDescription camera,
+  ) {
     final rotation = _rotationFromSensor(camera);
     if (rotation == null) return null;
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
@@ -238,7 +244,8 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
     if (Platform.isIOS) {
       return InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     }
-    final rotationCompensation = _orientations[_controller!.value.deviceOrientation];
+    final rotationCompensation =
+        _orientations[_controller!.value.deviceOrientation];
     if (rotationCompensation == null) return null;
     final isFront = camera.lensDirection == CameraLensDirection.front;
     final rotation = isFront

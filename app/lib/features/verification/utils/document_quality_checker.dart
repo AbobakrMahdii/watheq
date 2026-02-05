@@ -52,7 +52,8 @@ class DocumentQualityChecker {
     final blur = _laplacianVariance(gray);
     final edge = _edgeDensity(gray);
 
-    final brightnessOk = brightness >= brightnessMin && brightness <= brightnessMax;
+    final brightnessOk =
+        brightness >= brightnessMin && brightness <= brightnessMax;
     final blurOk = blur >= blurMin;
     final edgeOk = edge >= edgeMin;
 
@@ -113,7 +114,7 @@ class DocumentQualityChecker {
     final mean = values.reduce((a, b) => a + b) / values.length;
     final variance =
         values.map((v) => (v - mean) * (v - mean)).reduce((a, b) => a + b) /
-            values.length;
+        values.length;
     return variance;
   }
 

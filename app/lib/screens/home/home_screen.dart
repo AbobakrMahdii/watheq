@@ -45,8 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _documentTypesError = null;
     });
     try {
-      _documentTypes =
-          await DocumentTypeApiService.instance.getActiveDocumentTypes();
+      _documentTypes = await DocumentTypeApiService.instance
+          .getActiveDocumentTypes();
       if (_documentTypes.isNotEmpty) {
         _selectedDocumentType = _documentTypes.first;
       }
@@ -194,37 +194,37 @@ class _HomeScreenState extends State<HomeScreen> {
                     _isLoadingDocumentTypes
                         ? const Center(child: CircularProgressIndicator())
                         : _documentTypesError != null
-                            ? Text(
-                                _documentTypesError!,
-                                style: const TextStyle(color: Colors.red),
-                                textAlign: TextAlign.center,
-                              )
-                            : _documentTypes.isEmpty
-                                ? const Text(
-                                    'لا توجد أنواع وثائق متاحة. يرجى إضافتها من لوحة التحكم.',
-                                    textAlign: TextAlign.center,
-                                  )
-                                : DropdownButtonFormField<DocumentTypeModel>(
-                                    // ignore: deprecated_member_use
-                                    value: _selectedDocumentType,
-                                    decoration: const InputDecoration(
-                                      labelText: 'نوع الهوية',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    items: _documentTypes
-                                        .map(
-                                          (docType) => DropdownMenuItem(
-                                            value: docType,
-                                            child: Text(docType.name),
-                                          ),
-                                        )
-                                        .toList(),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _selectedDocumentType = value;
-                                      });
-                                    },
+                        ? Text(
+                            _documentTypesError!,
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          )
+                        : _documentTypes.isEmpty
+                        ? const Text(
+                            'لا توجد أنواع وثائق متاحة. يرجى إضافتها من لوحة التحكم.',
+                            textAlign: TextAlign.center,
+                          )
+                        : DropdownButtonFormField<DocumentTypeModel>(
+                            // ignore: deprecated_member_use
+                            value: _selectedDocumentType,
+                            decoration: const InputDecoration(
+                              labelText: 'نوع الهوية',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _documentTypes
+                                .map(
+                                  (docType) => DropdownMenuItem(
+                                    value: docType,
+                                    child: Text(docType.name),
                                   ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedDocumentType = value;
+                              });
+                            },
+                          ),
 
                     const SizedBox(height: 16),
 
@@ -254,14 +254,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     // زر الرفع
                     ElevatedButton(
-                      onPressed:
-                          isFormComplete && !_isSubmitting ? _uploadData : null,
+                      onPressed: isFormComplete && !_isSubmitting
+                          ? _uploadData
+                          : null,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.all(14),
                       ),
-                      child: Text(
-                        _isSubmitting ? 'جاري الرفع...' : 'رفع',
-                      ),
+                      child: Text(_isSubmitting ? 'جاري الرفع...' : 'رفع'),
                     ),
                   ],
                 ),
