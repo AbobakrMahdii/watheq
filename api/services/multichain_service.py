@@ -55,9 +55,9 @@ def list_stream_items() -> List[Dict[str, Any]]:
     for item in items:
         data_hex = item.get("data", "")
         try:
-          decoded = hex_to_json(data_hex)
+            decoded = hex_to_json(data_hex)
         except Exception:
-          decoded = None
+            decoded = None
         parsed.append(
             {
                 "key": item.get("key"),
@@ -69,3 +69,30 @@ def list_stream_items() -> List[Dict[str, Any]]:
             }
         )
     return parsed
+
+
+def get_item_by_key(key: str) -> Optional[Dict[str, Any]]:
+    """
+    Read latest item for a given key from the stream.
+    """
+    raw = _run_cli(["liststreamkeyitems", STREAM_NAME, key, "false", "1"])
+    try:
+        items = json.loads(raw)
+    except Exception:
+        return None
+    if not items:
+        return None
+    item = items[-1]
+    data_hex = item.get("data", "")
+    try:
+        decoded = hex_to_json(data_hex)
+    except Exception:
+        decoded = None
+    return {
+        "key": item.get("key"),
+        "txid": item.get("txid"),
+        "confirmations": item.get("confirmations"),
+        "blocktime": item.get("blocktime"),
+        "data_hex": data_hex,
+        "data_json": decoded,
+    }

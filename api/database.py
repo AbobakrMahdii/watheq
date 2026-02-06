@@ -30,6 +30,54 @@ DATABASE_URL = f"mysql+aiomysql://{DB_USER_ESC}:{DB_PASSWORD_ESC}@{DB_HOST}/{DB_
 database = Database(DATABASE_URL)
 
 # =========================
+# Hashes / Documents table
+# =========================
+class DocumentHashesCollection:
+    """
+    تخزين بصمة الملف (SHA-256) مع CID لتفادي التكرار.
+    نستخدم قاعدة البيانات لتسريع التحقق قبل النشر على البلوكشين.
+    """
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    async def _ensure_connected(self) -> None:
+        if not self.db.is_connected:
+            await self.db.connect()
+
+    async def find_by_hash(self, file_hash: str) -> Optional[Dict[str, Any]]:
+        await self._ensure_connected()
+        row = await self.db.fetch_one(
+            "SELECT document_id, hash, ipfs_cid, created_at FROM document_hashes WHERE hash = :h",
+            values={"h": file_hash},
+        )
+        return dict(row) if row else None
+
+    async def insert_one(self, document_id: str, file_hash: str, ipfs_cid: str) -> None:
+        await self._ensure_connected()
+        await self.db.execute(
+            """
+            INSERT INTO document_hashes (document_id, hash, ipfs_cid, created_at)
+            VALUES (:document_id, :hash, :ipfs_cid, NOW())
+            """,
+            values={
+                "document_id": document_id,
+                "hash": file_hash,
+                "ipfs_cid": ipfs_cid,
+            },
+        )
+
+
+_document_hashes_collection: Optional[DocumentHashesCollection] = None
+
+
+def get_document_hashes_collection() -> DocumentHashesCollection:
+    global _document_hashes_collection
+    if _document_hashes_collection is None:
+        _document_hashes_collection = DocumentHashesCollection(database)
+    return _document_hashes_collection
+
+# =========================
 # Users Collection
 # =========================
 class UsersCollection:
@@ -824,6 +872,20 @@ async def init_db():
     );
     """
     await database.execute(steps_query)
+
+    # Create document_hashes table for deduplication
+    doc_hash_query = """
+    CREATE TABLE IF NOT EXISTS document_hashes (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        document_id CHAR(36) NOT NULL,
+        hash CHAR(64) NOT NULL UNIQUE,
+        ipfs_cid VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_hash (hash),
+        INDEX idx_doc_id (document_id)
+    );
+    """
+    await database.execute(doc_hash_query)
 
 
 
