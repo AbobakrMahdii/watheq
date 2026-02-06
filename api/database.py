@@ -78,6 +78,59 @@ def get_document_hashes_collection() -> DocumentHashesCollection:
     return _document_hashes_collection
 
 # =========================
+# Biometric audit log table
+# =========================
+class BiometricAuditCollection:
+    """
+    تسجيل نتائج التحقق البيومتري (حيوية + تطابق الوجه) مع عدم تخزين الصور الخام.
+    """
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    async def _ensure_connected(self) -> None:
+        if not self.db.is_connected:
+            await self.db.connect()
+
+    async def insert_one(
+        self,
+        user_id: int,
+        document_id: str,
+        liveness_result: str,
+        match_result: bool,
+        confidence_score: float,
+    ) -> None:
+        await self._ensure_connected()
+        await self.db.execute(
+            """
+            INSERT INTO biometric_audit_log (
+                user_id, document_id, liveness_result,
+                match_result, confidence_score, created_at
+            ) VALUES (
+                :user_id, :document_id, :liveness_result,
+                :match_result, :confidence_score, NOW()
+            )
+            """,
+            values={
+                "user_id": user_id,
+                "document_id": document_id,
+                "liveness_result": liveness_result,
+                "match_result": int(bool(match_result)),
+                "confidence_score": confidence_score,
+            },
+        )
+
+
+_biometric_audit_collection: Optional[BiometricAuditCollection] = None
+
+
+def get_biometric_audit_collection() -> BiometricAuditCollection:
+    global _biometric_audit_collection
+    if _biometric_audit_collection is None:
+        _biometric_audit_collection = BiometricAuditCollection(database)
+    return _biometric_audit_collection
+
+# =========================
 # Users Collection
 # =========================
 class UsersCollection:
@@ -886,6 +939,22 @@ async def init_db():
     );
     """
     await database.execute(doc_hash_query)
+
+    # Create biometric audit log table
+    biometric_audit_query = """
+    CREATE TABLE IF NOT EXISTS biometric_audit_log (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        document_id VARCHAR(255) NOT NULL,
+        liveness_result VARCHAR(50) NOT NULL,
+        match_result BOOLEAN NOT NULL,
+        confidence_score DOUBLE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_bio_user (user_id),
+        INDEX idx_bio_doc (document_id)
+    );
+    """
+    await database.execute(biometric_audit_query)
 
 
 

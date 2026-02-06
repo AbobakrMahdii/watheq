@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+
+from api.security import get_current_user
+from api.services.liveness_service import simple_liveness_check
+from api.database import get_biometric_audit_collection
+from ai.Biometric.face_service import FaceService
+
+router = APIRouter(
+    prefix="/api/v1/biometric",
+    tags=["Biometric"],
+    dependencies=[Depends(get_current_user)],
+)
+
+# نستخدم FaceService (DeepFace) لمطابقة الوجوه بدقة أعلى من المقارنة المبسطة.
+_face_service: Optional[FaceService] = None
+_face_err: Optional[str] = None
+try:
+    _face_service = FaceService()
+except Exception as exc:
+    _face_service = None
+    _face_err = str(exc)
+
+
+@router.post("/verify")
+async def biometric_verify(
+    selfie_image: UploadFile = File(...),
+    document_image: UploadFile = File(...),
+    user_id: int = Form(...),
+    document_id: str = Form(...),
+):
+    """
+    تدفق التحقق البيومتري:
+    1) Liveness (حيوية) لمنع التلاعب بالصور/الشاشات.
+    2) Face Matching عبر DeepFace (FaceService) للحصول على match/distance/similarity.
+    3) تسجيل نتيجة التدقيق دون تخزين الصور لأسباب خصوصية.
+    الفرق: liveness يتحقق من أن الصورة حقيقية وحية، بينما face matching يطابق هوية الشخص مع الوثيقة.
+    """
+    if _face_service is None:
+        raise HTTPException(status_code=503, detail=f"FaceService unavailable: {_face_err}")
+
+    selfie_bytes = await selfie_image.read()
+    doc_bytes = await document_image.read()
+
+    # 4.1.2 Liveness
+    is_live, liveness_msg = simple_liveness_check(selfie_bytes)
+    if not is_live:
+        await _audit(user_id, document_id, liveness_msg, False, 0.0)
+        raise HTTPException(status_code=400, detail=f"Liveness failed: {liveness_msg}")
+
+    # 4.1.3 + 4.1.4 Face Matching عبر DeepFace
+    try:
+        face_result = _face_service.verify_faces(doc_bytes, selfie_bytes)
+    except Exception as exc:
+        await _audit(user_id, document_id, "face_match_failed", False, 0.0)
+        raise HTTPException(status_code=400, detail=f"Face match failed: {exc}")
+
+    match = bool(face_result.get("match", False))
+    distance = float(face_result.get("distance", 1.0))
+    threshold = float(face_result.get("threshold", 0.7))
+    similarity = float(face_result.get("similarity", 0.0))
+    similarity_percent = face_result.get("similarity_percent")
+
+    # لا نخزن الصور بعد المعالجة حفاظًا على الخصوصية؛ نخزن فقط النتائج العددية.
+    await _audit(user_id, document_id, "live", match, similarity)
+
+    return {
+        "liveness": {"passed": is_live, "message": liveness_msg},
+        "match": {
+            "passed": match,
+            "distance": distance,
+            "threshold": threshold,
+            "similarity": similarity,
+            "similarity_percent": similarity_percent,
+        },
+    }
+
+
+async def _audit(user_id: int, document_id: str, liveness_result: str, match_result: bool, score: float):
+    """
+    تسجيل نتائج التحقق البيومتري دون تخزين الصور الخام.
+    نستخدم similarity كـ confidence_score للقياس العددي.
+    """
+    audit = get_biometric_audit_collection()
+    await audit.insert_one(
+        user_id=user_id,
+        document_id=document_id,
+        liveness_result=liveness_result,
+        match_result=match_result,
+        confidence_score=score,
+    )
