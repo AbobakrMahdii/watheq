@@ -96,6 +96,28 @@ class VerificationOrchestratorService {
       throw VerificationOrchestratorException(message, cause: e);
     }
   }
+
+  Future<VerificationSummary> listMy({
+    int page = 1,
+    int pageSize = 10,
+  }) async {
+    final session = await AuthService.instance.getSavedSession();
+    if (session == null) {
+      throw const VerificationOrchestratorException('غير مسجل الدخول');
+    }
+
+    try {
+      final dio = ApiClient(accessToken: session.accessToken).dio;
+      final response = await dio.get(
+        '/api/v1/verifications/my',
+        queryParameters: {'page': page, 'page_size': pageSize},
+      );
+      return VerificationSummary.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      final message = NetworkExceptions.toUserMessage(e);
+      throw VerificationOrchestratorException(message, cause: e);
+    }
+  }
 }
 
 class VerificationOrchestratorException implements Exception {

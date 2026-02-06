@@ -119,12 +119,52 @@ async def login(request: Request):
 
 
 @router.get("/me")
-def me(current_user=Depends(get_current_user)):
-    return current_user
+async def me(current_user=Depends(get_current_user)):
+    users = get_user_collection()
+    user_doc = None
+    try:
+        user_id = int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None
+        if user_id is not None:
+            user_doc = await users.find_one({"_id": user_id})
+    except Exception:
+        user_doc = None
+
+    if user_doc:
+        return {
+            "id": user_doc.get("_id"),
+            "name": user_doc.get("name"),
+            "username": user_doc.get("username"),
+            "email": user_doc.get("email"),
+            "role": user_doc.get("role"),
+        }
+
+    return {
+        "id": current_user.get("sub"),
+        "email": current_user.get("email"),
+        "role": current_user.get("role"),
+    }
 
 
 @router.get("/admin/me")
-def admin_me(admin=Depends(get_current_admin)):
+async def admin_me(admin=Depends(get_current_admin)):
+    users = get_user_collection()
+    user_doc = None
+    try:
+        user_id = int(admin.get("sub")) if str(admin.get("sub")).isdigit() else None
+        if user_id is not None:
+            user_doc = await users.find_one({"_id": user_id})
+    except Exception:
+        user_doc = None
+
+    if user_doc:
+        return {
+            "id": user_doc.get("_id"),
+            "name": user_doc.get("name"),
+            "username": user_doc.get("username"),
+            "email": user_doc.get("email"),
+            "role": user_doc.get("role"),
+        }
+
     return admin
 
 

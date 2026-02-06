@@ -1,7 +1,9 @@
+import 'package:app/screens/dashboard/dashboard_screen.dart'
+    show DashboardScreen;
 import 'package:flutter/material.dart';
 
 import 'screens/auth/login.dart';
-import 'screens/home/home_screen.dart';
+import 'screens/dashboard/views/home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'ui/app_theme.dart';
 
@@ -22,6 +24,7 @@ class MyApp extends StatelessWidget {
         '/': (context) => SplashScreen(),
         "/login": (context) => LoginScreen(),
         "/home": (context) => HomeScreen(),
+        "/dashboard": (context) => DashboardScreen(),
       },
     );
   }

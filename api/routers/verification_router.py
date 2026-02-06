@@ -4,12 +4,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form, Query
 import cv2
 import numpy as np
 
 from api.database import get_verifications_collection, get_verification_steps_collection
-from api.models import VerificationPublic, VerificationStepPublic, VerificationStatus
+from api.models import (
+    VerificationListWithStatsResponse,
+    VerificationPublic,
+    VerificationStepPublic,
+    VerificationStatus,
+)
 from api.security import get_current_user
 from api.services.verification_orchestrator import VerificationOrchestrator, VerificationInput
 
@@ -96,6 +101,38 @@ async def start_verification(
 
     item = await verifications.find_one(verification_id)
     return item
+
+
+@router.get("/my", response_model=VerificationListWithStatsResponse)
+async def list_my_verifications(
+    current_user=Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+):
+    user_id = int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="Invalid user id")
+
+    verifications = get_verifications_collection()
+    offset = (page - 1) * page_size
+    items = await verifications.list_by_user(user_id, limit=page_size, offset=offset)
+    total = await verifications.count(user_id=user_id)
+    status_counts = await verifications.count_by_status(user_id)
+
+    normalized_status_counts = {
+        "SUCCESS": status_counts.get(VerificationStatus.SUCCESS.value, 0),
+        "FAILED": status_counts.get(VerificationStatus.FAILED.value, 0),
+        "RUNNING": status_counts.get(VerificationStatus.RUNNING.value, 0),
+        "PENDING": status_counts.get(VerificationStatus.PENDING.value, 0),
+    }
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+        "status_counts": normalized_status_counts,
+    }
 
 
 @router.get("/{verification_id}", response_model=VerificationPublic)

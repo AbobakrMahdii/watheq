@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 class IPFSService:
     """
-    Simple HTTP-based IPFS client talking to the Kubo API at :5001.
+    Simple HTTP-based IPFS client talking to the Kubo API (default mapped to :15001).
     No dependency on ipfshttpclient (so no version mismatch issues).
     """
 
-    def __init__(self, base_url: str = "http://127.0.0.1:5001/api/v0"):
+    def __init__(self, base_url: str = "http://127.0.0.1:15001/api/v0"):
         self.base_url = base_url.rstrip("/")
         # مجرد فحص مبدئي (اختياري)
         try:

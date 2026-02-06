@@ -7,9 +7,9 @@ services:
     restart: unless-stopped
 
     ports:
-      - "4001:4001" # Swarm
-      - "5001:5001" # API
-      - "8080:8080" # Gateway
+      - "14001:4001" # Swarm
+      - "15001:5001" # API
+      - "18080:8080" # Gateway
 
     volumes:
       - ipfs_data:/data/ipfs

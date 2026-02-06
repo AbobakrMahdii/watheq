@@ -24,7 +24,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final isValid = await AuthService.instance.validateToken();
     if (!mounted || _didNavigate) return;
     _didNavigate = true;
-    Navigator.pushReplacementNamed(context, isValid ? '/home' : '/login');
+    Navigator.pushReplacementNamed(context, isValid ? '/dashboard' : '/login');
   }
 
   @override

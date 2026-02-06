@@ -586,6 +586,17 @@ class VerificationsCollection:
             row = await self.db.fetch_one("SELECT COUNT(*) as total FROM verifications")
         return int(row["total"]) if row else 0
 
+    async def count_by_status(self, user_id: int) -> Dict[str, int]:
+        await self._ensure_connected()
+        q = """
+            SELECT status, COUNT(*) as total
+            FROM verifications
+            WHERE user_id = :user_id
+            GROUP BY status
+        """
+        rows = await self.db.fetch_all(q, values={"user_id": user_id})
+        return {row["status"]: int(row["total"]) for row in rows}
+
 
 class VerificationStepsCollection:
     def __init__(self, db: Database):
