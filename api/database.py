@@ -242,11 +242,11 @@ class DocumentTypesCollection:
         if not filt:
             return None
         if "_id" in filt:
-            q = "SELECT id as id, name, is_active, requires_back_image, created_at FROM document_types WHERE id = :id"
+            q = "SELECT id as id, name, folder_name, is_active, requires_back_image, created_at FROM document_types WHERE id = :id"
             row = await self.db.fetch_one(q, values={"id": int(filt["_id"])})
             return dict(row) if row else None
         if "name" in filt:
-            q = "SELECT id as id, name, is_active, requires_back_image, created_at FROM document_types WHERE name = :name"
+            q = "SELECT id as id, name, folder_name, is_active, requires_back_image, created_at FROM document_types WHERE name = :name"
             row = await self.db.fetch_one(q, values={"name": filt["name"]})
             return dict(row) if row else None
         return None
@@ -259,7 +259,7 @@ class DocumentTypesCollection:
             query_parts.append("is_active = :is_active")
             values["is_active"] = filt["is_active"]
 
-        q = "SELECT id as id, name, is_active, requires_back_image, created_at FROM document_types"
+        q = "SELECT id as id, name, folder_name, is_active, requires_back_image, created_at FROM document_types"
         if query_parts:
             q += " WHERE " + " AND ".join(query_parts)
         q += " ORDER BY name"
@@ -269,8 +269,8 @@ class DocumentTypesCollection:
     async def insert_one(self, doc: Dict[str, Any]) -> int:
         await self._ensure_connected()
         q = """
-            INSERT INTO document_types (name, is_active, requires_back_image, created_at)
-            VALUES (:name, :is_active, :requires_back_image, :created_at)
+            INSERT INTO document_types (name, folder_name, is_active, requires_back_image, created_at)
+            VALUES (:name, :folder_name, :is_active, :requires_back_image, :created_at)
         """
         return await self.db.execute(q, values=doc)
 
@@ -848,12 +848,19 @@ async def init_db():
     CREATE TABLE IF NOT EXISTS document_types (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) UNIQUE NOT NULL,
+        folder_name VARCHAR(255) NOT NULL,
         is_active BOOLEAN DEFAULT TRUE,
         requires_back_image BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
     await database.execute(query)
+
+    # Try to add folder_name column on existing deployments (ignore if already exists)
+    try:
+        await database.execute("ALTER TABLE document_types ADD COLUMN folder_name VARCHAR(255) NOT NULL DEFAULT 'identity';")
+    except Exception:
+        pass
 
     # Create audit_logs table if not exists
     audit_query = """

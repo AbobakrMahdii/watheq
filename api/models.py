@@ -26,6 +26,7 @@ class UserLogin(BaseModel):
 
 class DocumentTypeBase(BaseModel):
     name: str
+    folder_name: str  # Required - maps to ai/data/refrences/{folder_name}
     is_active: bool = True
     requires_back_image: bool = False
 
@@ -36,6 +37,7 @@ class DocumentTypeCreate(DocumentTypeBase):
 
 class DocumentTypeUpdate(DocumentTypeBase):
     name: Optional[str] = None
+    folder_name: Optional[str] = None
     is_active: Optional[bool] = None
     requires_back_image: Optional[bool] = None
 
