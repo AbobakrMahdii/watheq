@@ -315,66 +315,60 @@ def layout_gating_verify(rectified_image: Path) -> dict[str, Any]:
     }
 
 
-def ml_verify(document_front: Path) -> dict[str, Any]:
-    # Reuse Logo/Stamp verification pipeline by calling the unified script.
+def ml_verify(document_front: Path, doc_type_folder: str = "identity") -> dict[str, Any]:
+    """
+    Run AI verification using the new dynamic verify_document.py script.
+    
+    Args:
+        document_front: Path to the document image
+        doc_type_folder: The folder_name from document_types table (e.g., 'identity', 'passport')
+    
+    Returns:
+        Verification result with decision, failed elements, and per-element scores
+    """
     repo_root = Path(__file__).resolve().parents[2]
-    module_dir = repo_root / "ai" / "LogoAndStamp"
-    if not module_dir.exists():
-        raise RuntimeError("ai/LogoAndStamp not found")
-
-    config_path = module_dir / "config.yaml"
-    if not config_path.exists():
-        raise RuntimeError("ai/LogoAndStamp/config.yaml not found")
+    verify_script = repo_root / "ai" / "verify_document.py"
+    
+    if not verify_script.exists():
+        raise RuntimeError("ai/verify_document.py not found")
 
     import subprocess
     import sys
-    import tempfile
 
-    with tempfile.TemporaryDirectory(prefix="watheq_doc_verify_") as tmpdir:
-        out_dir = Path(tmpdir) / "out"
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        cmd = [
-            sys.executable,
-            str(module_dir / "main_unified.py"),
-            "--input",
-            str(document_front),
-            "--config",
-            str(config_path),
-            "--output",
-            str(out_dir),
-        ]
-        proc = subprocess.run(
-            cmd,
-            cwd=str(module_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+    cmd = [
+        sys.executable,
+        str(verify_script),
+        "--image", str(document_front),
+        "--type", doc_type_folder,
+        "--json",
+    ]
+    
+    proc = subprocess.run(
+        cmd,
+        cwd=str(repo_root),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"AI verification failed (exit {proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
         )
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"LogoAndStamp failed (exit {proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
-            )
 
-        report_path = out_dir / f"{document_front.stem}_unified_report.json"
-        if not report_path.exists():
-            raise RuntimeError("Unified report not generated")
+    result = json.loads(proc.stdout)
+    
+    # Calculate authenticity percent from element scores
+    element_results = result.get("element_results", {})
+    scores = [r.get("score", 0) for r in element_results.values() if r.get("status") != "ERROR"]
+    authenticity_percent = (sum(scores) / len(scores) * 100) if scores else None
 
-        unified = json.loads(report_path.read_text(encoding="utf-8"))
-        logo_report = (unified.get("verifications") or {}).get("logo") or {}
-        stamp_report = (unified.get("verifications") or {}).get("stamp") or {}
-
-        logo_percent = _compute_percent(logo_report)
-        stamp_percent = _compute_percent(stamp_report)
-        available = [p for p in [logo_percent, stamp_percent] if p is not None]
-        authenticity_percent = float(sum(available) / len(available)) if available else None
-
-        return {
-            "final_decision": unified.get("final_decision"),
-            "authenticity_percent": authenticity_percent,
-            "logo": logo_report,
-            "stamp": stamp_report,
-        }
+    return {
+        "final_decision": result.get("decision"),
+        "authenticity_percent": authenticity_percent,
+        "failed_elements": result.get("failed_elements", []),
+        "element_results": element_results,
+    }
 
 
 def ocr_verify(document_front: Path, max_pages: int = 10) -> dict[str, Any]:
