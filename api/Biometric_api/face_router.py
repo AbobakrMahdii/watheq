@@ -1,24 +1,22 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from Biometric.face_service import FaceService
 
 router = APIRouter(prefix="/face", tags=["face"])
 
 
 def get_face_service():
-    # lazy import to avoid heavy third-party imports at app startup
-    from Biometric.face_service import FaceService
     return FaceService()
 
 
-@router.post("/verify")
-async def verify_face(
+@router.post("/verify-id-live")
+async def verify_id_vs_live(
     photo1: UploadFile = File(...),
     photo2: UploadFile = File(...),
-    service: "FaceService" = Depends(get_face_service),
+    service: FaceService = Depends(get_face_service),
 ):
     try:
-        data1 = await photo1.read()
-        data2 = await photo2.read()
-        result = service.verify_faces(data1, data2)
-        return result
+        p1 = await photo1.read()
+        p2 = await photo2.read()
+        return service.verify_id_vs_live(p1, p2)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))

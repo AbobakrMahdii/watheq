@@ -71,10 +71,12 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       var current = record;
       while (current.status == VerificationStatus.pending ||
           current.status == VerificationStatus.running) {
-        current =
-            await VerificationOrchestratorService.instance.getStatus(record.id);
-        final steps =
-            await VerificationOrchestratorService.instance.getSteps(record.id);
+        current = await VerificationOrchestratorService.instance.getStatus(
+          record.id,
+        );
+        final steps = await VerificationOrchestratorService.instance.getSteps(
+          record.id,
+        );
         if (!mounted) return;
         setState(() {
           _steps = steps;
@@ -86,16 +88,14 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       }
 
       if (current.status == VerificationStatus.failed) {
-        throw SubmitVerificationException(
-          current.errorMessage ?? 'فشل التحقق',
-        );
+        throw SubmitVerificationException(current.errorMessage ?? 'فشل التحقق');
       }
 
       final data = current.resultData ?? {};
       final facePayload =
           (data['FACE_MATCHING'] as Map?)?.cast<String, dynamic>() ??
-              (data['BIOMETRIC'] as Map?)?.cast<String, dynamic>() ??
-              {};
+          (data['BIOMETRIC'] as Map?)?.cast<String, dynamic>() ??
+          {};
       final face = FaceVerifyResult.fromJson(facePayload);
       final ocr = (data['OCR'] as Map?)?.cast<String, dynamic>() ?? {};
       final blockchain =
@@ -128,7 +128,9 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      final message = e is SubmitVerificationException ? e.message : e.toString();
+      final message = e is SubmitVerificationException
+          ? e.message
+          : e.toString();
       setState(() {
         _error = message;
         _isLoading = false;
@@ -149,14 +151,14 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
             child: _isLoading
                 ? _ProgressView(steps: _steps, currentStage: _currentStage)
                 : _error != null
-                    ? _ErrorView(message: _error!, onRetry: _run, steps: _steps)
-                    : _ResultView(
-                        result: _result!,
-                        documentTypeName: widget.documentTypeName,
-                        documentDecision: _documentDecision,
-                        documentPercent: _documentPercent,
-                        steps: _steps,
-                      ),
+                ? _ErrorView(message: _error!, onRetry: _run, steps: _steps)
+                : _ResultView(
+                    result: _result!,
+                    documentTypeName: widget.documentTypeName,
+                    documentDecision: _documentDecision,
+                    documentPercent: _documentPercent,
+                    steps: _steps,
+                  ),
           ),
         ),
       ),
@@ -220,21 +222,23 @@ class _ProgressView extends StatelessWidget {
                         step.status == VerificationStatus.success
                             ? Icons.check_circle
                             : step.status == VerificationStatus.failed
-                                ? Icons.error
-                                : Icons.timelapse,
+                            ? Icons.error
+                            : Icons.timelapse,
                         size: 18,
                         color: step.status == VerificationStatus.success
                             ? AppColors.success
                             : step.status == VerificationStatus.failed
-                                ? AppColors.danger
-                                : AppColors.textSecondary,
+                            ? AppColors.danger
+                            : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '${labelForStage(step.stage)} - $statusText',
                           style: TextStyle(
-                            fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                            fontWeight: isActive
+                                ? FontWeight.w800
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
@@ -362,7 +366,7 @@ class _ResultView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'النموذج: ${result.face.model} • المعيار: ${result.face.distanceMetric}',
+                  'عتبة القبول: ${result.face.acceptThresholdPercent.toStringAsFixed(1)}%',
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
               ],
@@ -381,14 +385,17 @@ class _ResultView extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 10),
-                if (documentPercent != null || (documentDecision ?? '').isNotEmpty)
+                if (documentPercent != null ||
+                    (documentDecision ?? '').isNotEmpty)
                   Row(
                     children: [
                       Icon(
                         (documentDecision ?? '').toUpperCase() == 'AUTHENTIC'
                             ? Icons.verified
                             : Icons.info_outline,
-                        color: (documentDecision ?? '').toUpperCase() == 'AUTHENTIC'
+                        color:
+                            (documentDecision ?? '').toUpperCase() ==
+                                'AUTHENTIC'
                             ? AppColors.success
                             : AppColors.textSecondary,
                       ),
@@ -405,7 +412,8 @@ class _ResultView extends StatelessWidget {
                       ),
                     ],
                   ),
-                if (documentPercent != null || (documentDecision ?? '').isNotEmpty)
+                if (documentPercent != null ||
+                    (documentDecision ?? '').isNotEmpty)
                   const SizedBox(height: 10),
                 Row(
                   children: [
@@ -517,10 +525,10 @@ class _StepsSummary extends StatelessWidget {
           final statusText = step.status == VerificationStatus.success
               ? 'تم'
               : step.status == VerificationStatus.failed
-                  ? 'فشل'
-                  : step.status == VerificationStatus.running
-                      ? 'قيد التنفيذ'
-                      : 'في الانتظار';
+              ? 'فشل'
+              : step.status == VerificationStatus.running
+              ? 'قيد التنفيذ'
+              : 'في الانتظار';
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -529,14 +537,14 @@ class _StepsSummary extends StatelessWidget {
                   step.status == VerificationStatus.success
                       ? Icons.check_circle
                       : step.status == VerificationStatus.failed
-                          ? Icons.error
-                          : Icons.timelapse,
+                      ? Icons.error
+                      : Icons.timelapse,
                   size: 18,
                   color: step.status == VerificationStatus.success
                       ? AppColors.success
                       : step.status == VerificationStatus.failed
-                          ? AppColors.danger
-                          : AppColors.textSecondary,
+                      ? AppColors.danger
+                      : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(child: Text('${_label(step.stage)} - $statusText')),

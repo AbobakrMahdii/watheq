@@ -52,7 +52,9 @@ def _compute_percent(report: dict[str, Any]) -> Optional[float]:
 
 def biometric_verify(document_front: Path, person_image: Path) -> dict[str, Any]:
     service = FaceService()
-    result = service.verify_faces(document_front.read_bytes(), person_image.read_bytes())
+    result = service.verify_id_vs_live(
+        document_front.read_bytes(), person_image.read_bytes()
+    )
     return result
 
 
@@ -98,12 +100,16 @@ def document_crop(document_front: Path, output_path: Path) -> dict[str, Any]:
     import shutil
 
     repo_root = Path(__file__).resolve().parents[2]
-    rectify_script = repo_root / "ai" / "card_verification" / "detect_and_rectify_card.py"
+    rectify_script = (
+        repo_root / "ai" / "card_verification" / "detect_and_rectify_card.py"
+    )
     if not rectify_script.exists():
         raise RuntimeError("detect_and_rectify_card.py not found")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=str(output_path.parent), prefix="rectify_run_") as tmpdir:
+    with tempfile.TemporaryDirectory(
+        dir=str(output_path.parent), prefix="rectify_run_"
+    ) as tmpdir:
         tmp_out = Path(tmpdir)
         cmd = [
             sys.executable,
@@ -134,7 +140,9 @@ def document_crop(document_front: Path, output_path: Path) -> dict[str, Any]:
 
         shutil.copyfile(rectified, output_path)
 
-    rectified_img = cv2.imdecode(np.fromfile(output_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    rectified_img = cv2.imdecode(
+        np.fromfile(output_path, dtype=np.uint8), cv2.IMREAD_COLOR
+    )
     if rectified_img is None:
         print("DOCUMENT_CROPPING: FAILED reason=BAD_RECTIFIED")
         raise RuntimeError("BAD_RECTIFIED")
@@ -246,7 +254,9 @@ def selfie_liveness_check(liveness_payload: Optional[dict[str, Any]]) -> dict[st
 
 def face_matching(document_face_path: Path, person_image: Path) -> dict[str, Any]:
     service = FaceService()
-    result = service.verify_faces(document_face_path.read_bytes(), person_image.read_bytes())
+    result = service.verify_id_vs_live(
+        document_face_path.read_bytes(), person_image.read_bytes()
+    )
     return result
 
 
@@ -315,20 +325,22 @@ def layout_gating_verify(rectified_image: Path) -> dict[str, Any]:
     }
 
 
-def ml_verify(document_front: Path, doc_type_folder: str = "identity") -> dict[str, Any]:
+def ml_verify(
+    document_front: Path, doc_type_folder: str = "identity"
+) -> dict[str, Any]:
     """
     Run AI verification using the new dynamic verify_document.py script.
-    
+
     Args:
         document_front: Path to the document image
         doc_type_folder: The folder_name from document_types table (e.g., 'identity', 'passport')
-    
+
     Returns:
         Verification result with decision, failed elements, and per-element scores
     """
     repo_root = Path(__file__).resolve().parents[2]
     verify_script = repo_root / "ai" / "verify_document.py"
-    
+
     if not verify_script.exists():
         raise RuntimeError("ai/verify_document.py not found")
 
@@ -338,11 +350,13 @@ def ml_verify(document_front: Path, doc_type_folder: str = "identity") -> dict[s
     cmd = [
         sys.executable,
         str(verify_script),
-        "--image", str(document_front),
-        "--type", doc_type_folder,
+        "--image",
+        str(document_front),
+        "--type",
+        doc_type_folder,
         "--json",
     ]
-    
+
     proc = subprocess.run(
         cmd,
         cwd=str(repo_root),
@@ -350,17 +364,21 @@ def ml_verify(document_front: Path, doc_type_folder: str = "identity") -> dict[s
         stderr=subprocess.PIPE,
         text=True,
     )
-    
+
     if proc.returncode != 0:
         raise RuntimeError(
             f"AI verification failed (exit {proc.returncode}): {proc.stderr.strip() or proc.stdout.strip()}"
         )
 
     result = json.loads(proc.stdout)
-    
+
     # Calculate authenticity percent from element scores
     element_results = result.get("element_results", {})
-    scores = [r.get("score", 0) for r in element_results.values() if r.get("status") != "ERROR"]
+    scores = [
+        r.get("score", 0)
+        for r in element_results.values()
+        if r.get("status") != "ERROR"
+    ]
     authenticity_percent = (sum(scores) / len(scores) * 100) if scores else None
 
     return {

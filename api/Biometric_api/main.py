@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from api.face_router import router as face_router
+from api.Biometric_api.face_router import router as face_router
 
 app = FastAPI(title="Watheq Face API")
 

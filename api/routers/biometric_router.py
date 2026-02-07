@@ -40,7 +40,9 @@ async def biometric_verify(
     الفرق: liveness يتحقق من أن الصورة حقيقية وحية، بينما face matching يطابق هوية الشخص مع الوثيقة.
     """
     if _face_service is None:
-        raise HTTPException(status_code=503, detail=f"FaceService unavailable: {_face_err}")
+        raise HTTPException(
+            status_code=503, detail=f"FaceService unavailable: {_face_err}"
+        )
 
     selfie_bytes = await selfie_image.read()
     doc_bytes = await document_image.read()
@@ -53,33 +55,35 @@ async def biometric_verify(
 
     # 4.1.3 + 4.1.4 Face Matching عبر DeepFace
     try:
-        face_result = _face_service.verify_faces(doc_bytes, selfie_bytes)
+        face_result = _face_service.verify_id_vs_live(doc_bytes, selfie_bytes)
     except Exception as exc:
         await _audit(user_id, document_id, "face_match_failed", False, 0.0)
         raise HTTPException(status_code=400, detail=f"Face match failed: {exc}")
 
-    match = bool(face_result.get("match", False))
-    distance = float(face_result.get("distance", 1.0))
-    threshold = float(face_result.get("threshold", 0.7))
-    similarity = float(face_result.get("similarity", 0.0))
-    similarity_percent = face_result.get("similarity_percent")
+    accepted = bool(face_result.get("accepted", False))
+    similarity_percent = float(face_result.get("similarity_percent", 0.0))
+    accept_threshold = float(face_result.get("accept_threshold_percent", 80.0))
 
     # لا نخزن الصور بعد المعالجة حفاظًا على الخصوصية؛ نخزن فقط النتائج العددية.
-    await _audit(user_id, document_id, "live", match, similarity)
+    await _audit(user_id, document_id, "live", accepted, similarity_percent / 100.0)
 
     return {
         "liveness": {"passed": is_live, "message": liveness_msg},
         "match": {
-            "passed": match,
-            "distance": distance,
-            "threshold": threshold,
-            "similarity": similarity,
+            "passed": accepted,
             "similarity_percent": similarity_percent,
+            "accept_threshold_percent": accept_threshold,
         },
     }
 
 
-async def _audit(user_id: int, document_id: str, liveness_result: str, match_result: bool, score: float):
+async def _audit(
+    user_id: int,
+    document_id: str,
+    liveness_result: str,
+    match_result: bool,
+    score: float,
+):
     """
     تسجيل نتائج التحقق البيومتري دون تخزين الصور الخام.
     نستخدم similarity كـ confidence_score للقياس العددي.
