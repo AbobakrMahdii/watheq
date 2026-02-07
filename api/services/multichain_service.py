@@ -1,6 +1,6 @@
 import json
 import subprocess
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 
 CHAIN_NAME = "watheqchain"
 STREAM_NAME = "documents"
