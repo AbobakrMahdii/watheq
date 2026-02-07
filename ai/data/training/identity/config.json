@@ -1,0 +1,43 @@
+{
+  "doc_type": "identity",
+  "elements": [
+    "barcode",
+    "full",
+    "logo",
+    "seal"
+  ],
+  "thresholds": {
+    "full": 0.8,
+    "seal": 0.8
+  },
+  "trained_at": "2026-02-07T07:12:41.667520",
+  "version": "1.0",
+  "results": {
+    "barcode": {
+      "status": "error",
+      "message": "'NoneType' object has no attribute 'ndim'",
+      "element": "barcode"
+    },
+    "full": {
+      "status": "success",
+      "element": "full",
+      "reference_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\refrences\\identity\\full.jpeg",
+      "output_dir": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\training\\identity\\full",
+      "trained_at": "2026-02-07T07:12:38.346794",
+      "threshold": 0.8
+    },
+    "logo": {
+      "status": "error",
+      "message": "'NoneType' object has no attribute 'ndim'",
+      "element": "logo"
+    },
+    "seal": {
+      "status": "success",
+      "element": "seal",
+      "reference_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\refrences\\identity\\seal.jpeg",
+      "output_dir": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\training\\identity\\seal",
+      "trained_at": "2026-02-07T07:12:41.667378",
+      "threshold": 0.8
+    }
+  }
+}

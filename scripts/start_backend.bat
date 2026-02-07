@@ -13,11 +13,11 @@ set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
 set "REQ_UNIFIED=%~dp0../requirements.unified.txt"
 set "REQ_API=%~dp0../api\requirements.txt"
 
-REM Check if Python 3.11 is available
-py -3.11 --version >nul 2>&1
+REM Check if Python 3.13 is available
+py -3.13 --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python 3.11 is not installed.
-    echo Please install Python 3.11 and try again.
+    echo ERROR: Python 3.13 is not installed.
+    echo Please install Python 3.13 and try again.
     pause
     exit /b 1
 )
@@ -25,7 +25,7 @@ if errorlevel 1 (
 REM Create .venv if it doesn't exist
 if not exist "%PYTHON_EXE%" (
     echo Creating virtual environment .venv...
-    py -3.11 -m venv "%VENV_DIR%"
+    py -3.13 -m venv "%VENV_DIR%"
 )
 
 REM Install dependencies only if needed
