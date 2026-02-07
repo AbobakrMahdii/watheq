@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/dashboard');
     } on AuthException catch (e) {
       if (!mounted) return;
       AppSnackbars.error(context, e.message);
@@ -69,7 +69,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 56,
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusMd,
+                      ),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     alignment: Alignment.center,
@@ -88,7 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 6),
                   const Text(
                     'يمكنك تسجيل الدخول فقط. إنشاء المستخدم يتم بواسطة الأدمن.',
-                    style: TextStyle(color: AppColors.textSecondary, height: 1.3),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      height: 1.3,
+                    ),
                   ),
                   const SizedBox(height: 18),
                   Card(
@@ -103,7 +108,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
-                              autofillHints: const [AutofillHints.username, AutofillHints.email],
+                              autofillHints: const [
+                                AutofillHints.username,
+                                AutofillHints.email,
+                              ],
                               decoration: const InputDecoration(
                                 labelText: 'البريد الإلكتروني',
                                 prefixIcon: Icon(Icons.alternate_email),
@@ -111,7 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               validator: (value) {
                                 final v = (value ?? '').trim();
                                 if (v.isEmpty) return 'أدخل البريد الإلكتروني';
-                                if (!v.contains('@')) return 'بريد إلكتروني غير صالح';
+                                if (!v.contains('@'))
+                                  return 'بريد إلكتروني غير صالح';
                                 return null;
                               },
                             ),
@@ -125,13 +134,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                 labelText: 'كلمة المرور',
                                 prefixIcon: const Icon(Icons.password),
                                 suffixIcon: IconButton(
-                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                  icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                                  onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                  ),
                                 ),
                               ),
                               onFieldSubmitted: (_) => _submit(),
                               validator: (value) {
-                                if ((value ?? '').isEmpty) return 'أدخل كلمة المرور';
+                                if ((value ?? '').isEmpty)
+                                  return 'أدخل كلمة المرور';
                                 return null;
                               },
                             ),

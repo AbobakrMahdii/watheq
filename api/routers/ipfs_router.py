@@ -7,8 +7,8 @@ from ledger.ipfs_service import IPFSService
 from api.services.audit_log_service import log_file_event
 
 router = APIRouter(
-    prefix="/ipfs",
-    tags=["ipfs"],
+    prefix="/api/v1/ipfs",
+    tags=["IPFS"],
 )
 
 logger = logging.getLogger("api.ipfs")

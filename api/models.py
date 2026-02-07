@@ -141,3 +141,10 @@ class VerificationListResponse(BaseModel):
     page: int
     page_size: int
     items: list[VerificationPublic]
+
+
+class VerificationListWithStatsResponse(VerificationListResponse):
+    status_counts: dict[str, int]
+
+    class Config:
+        validate_assignment = True

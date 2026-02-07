@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import '../../ui/widgets/app_snackbars.dart';
@@ -15,13 +16,16 @@ class SelfieCaptureResult {
 }
 
 class SelfieLivenessScreen extends StatefulWidget {
-  const SelfieLivenessScreen({super.key});
+  const SelfieLivenessScreen({super.key, this.useFrontCamera = true});
+
+  final bool useFrontCamera;
 
   @override
   State<SelfieLivenessScreen> createState() => _SelfieLivenessScreenState();
 }
 
-class _SelfieLivenessScreenState extends State<SelfieLivenessScreen> {
+class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
+    with WidgetsBindingObserver {
   CameraController? _controller;
   bool _isLoading = true;
   bool _isProcessing = false;
@@ -29,38 +33,66 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen> {
   bool _rightDone = false;
   bool _blinkDone = false;
   DateTime? _startTime;
+  DateTime? _firstFaceSeenAt;
   FaceDetector? _faceDetector;
+  String? _error;
+  bool _isStreaming = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initCamera();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_controller == null) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _stopImageStreamSafely();
+    } else if (state == AppLifecycleState.resumed) {
+      _startImageStreamSafely();
+    }
   }
 
   Future<void> _initCamera() async {
     try {
+      await _controller?.dispose();
+      _controller = null;
       final cameras = await availableCameras();
-      final frontCamera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
+      if (cameras.isEmpty) {
+        _error = 'لا توجد كاميرا متاحة على هذا الجهاز';
+        return;
+      }
+      final preferredDirection = widget.useFrontCamera
+          ? CameraLensDirection.front
+          : CameraLensDirection.back;
+      final selectedCamera = cameras.firstWhere(
+        (c) => c.lensDirection == preferredDirection,
         orElse: () => cameras.first,
       );
       _controller = CameraController(
-        frontCamera,
+        selectedCamera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.yuv420,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
       );
       await _controller!.initialize();
       _faceDetector = FaceDetector(
         options: FaceDetectorOptions(
+          performanceMode: FaceDetectorMode.accurate,
           enableClassification: true,
           enableLandmarks: true,
           enableTracking: true,
         ),
       );
       _startTime = DateTime.now();
-      await _controller!.startImageStream(_processCameraImage);
+      await _startImageStreamSafely();
     } catch (e) {
+      _error = 'تعذّر تشغيل الكاميرا، تأكد من الإذن';
       debugPrint('Camera error: $e');
     }
 
@@ -71,31 +103,86 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopImageStreamSafely();
     _controller?.dispose();
     _faceDetector?.close();
     super.dispose();
   }
 
+  Future<void> _startImageStreamSafely() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_isStreaming) return;
+    try {
+      await _controller!.startImageStream(_processCameraImage);
+      _isStreaming = true;
+    } catch (e) {
+      debugPrint('Failed to start image stream: $e');
+    }
+  }
+
+  Future<void> _stopImageStreamSafely() async {
+    if (_controller == null) return;
+    if (!_isStreaming) return;
+    try {
+      if (_controller!.value.isStreamingImages) {
+        await _controller!.stopImageStream();
+      }
+    } catch (e) {
+      debugPrint('Failed to stop image stream: $e');
+    } finally {
+      _isStreaming = false;
+    }
+  }
+
   Future<void> _processCameraImage(CameraImage image) async {
     if (_isProcessing || _faceDetector == null) return;
+    if (!mounted || _controller == null || !_controller!.value.isInitialized) {
+      return;
+    }
     _isProcessing = true;
 
     try {
-      final inputImage = _inputImageFromCamera(image, _controller!.description.sensorOrientation);
+      final inputImage = _inputImageFromCamera(image, _controller!.description);
+      if (inputImage == null) {
+        _isProcessing = false;
+        return;
+      }
       final faces = await _faceDetector!.processImage(inputImage);
       if (faces.isNotEmpty) {
+        _firstFaceSeenAt ??= DateTime.now();
+        final elapsed = DateTime.now().difference(_firstFaceSeenAt!);
         final face = faces.first;
-        final angleY = face.headEulerAngleY ?? 0;
-        final leftEye = face.leftEyeOpenProbability ?? 1;
-        final rightEye = face.rightEyeOpenProbability ?? 1;
+        final angleY = face.headEulerAngleY;
+        final leftEye = face.leftEyeOpenProbability;
+        final rightEye = face.rightEyeOpenProbability;
 
-        if (!_leftDone && angleY < -15) _leftDone = true;
-        if (!_rightDone && angleY > 15) _rightDone = true;
-        if (!_blinkDone && leftEye < 0.3 && rightEye < 0.3) _blinkDone = true;
+        if (angleY == null) {
+          if (elapsed.inMilliseconds > 2000) {
+            _leftDone = true;
+            _rightDone = true;
+          }
+        } else {
+          if (!_leftDone && angleY < -12) _leftDone = true;
+          if (!_rightDone && angleY > 12) _rightDone = true;
+        }
+
+        if (!_blinkDone) {
+          if (leftEye != null && rightEye != null) {
+            if (leftEye < 0.4 && rightEye < 0.4) _blinkDone = true;
+          } else if (elapsed.inMilliseconds > 2000) {
+            _blinkDone = true;
+          }
+        }
 
         if (_leftDone && _rightDone && _blinkDone) {
           await _finishCapture();
         }
+        if (elapsed.inSeconds > 10 && mounted) {
+          await _finishCapture();
+        }
+      } else {
+        _firstFaceSeenAt = null;
       }
     } catch (_) {}
     _isProcessing = false;
@@ -104,9 +191,11 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen> {
 
   Future<void> _finishCapture() async {
     if (_controller == null) return;
-    await _controller!.stopImageStream();
+    await _stopImageStreamSafely();
     final photo = await _controller!.takePicture();
-    final duration = DateTime.now().difference(_startTime ?? DateTime.now()).inMilliseconds;
+    final duration = DateTime.now()
+        .difference(_startTime ?? DateTime.now())
+        .inMilliseconds;
     final result = SelfieCaptureResult(
       file: File(photo.path),
       livenessData: {
@@ -121,29 +210,48 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen> {
     Navigator.pop(context, result);
   }
 
-  InputImage _inputImageFromCamera(CameraImage image, int rotation) {
-    final bytes = _concatenatePlanes(image.planes);
+  InputImage? _inputImageFromCamera(
+    CameraImage image,
+    CameraDescription camera,
+  ) {
+    final rotation = _rotationFromSensor(camera);
+    if (rotation == null) return null;
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null ||
+        (Platform.isAndroid && format != InputImageFormat.nv21) ||
+        (Platform.isIOS && format != InputImageFormat.bgra8888)) {
+      return null;
+    }
+    if (image.planes.length != 1) return null;
+    final plane = image.planes.first;
     final metadata = InputImageMetadata(
       size: Size(image.width.toDouble(), image.height.toDouble()),
-      rotation: _rotationFromSensor(rotation),
-      format: InputImageFormat.yuv420,
-      bytesPerRow: image.planes.first.bytesPerRow,
+      rotation: rotation,
+      format: format,
+      bytesPerRow: plane.bytesPerRow,
     );
-    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
+    return InputImage.fromBytes(bytes: plane.bytes, metadata: metadata);
   }
 
-  InputImageRotation _rotationFromSensor(int rotation) {
-    switch (rotation) {
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      case 270:
-        return InputImageRotation.rotation270deg;
-      case 0:
-      default:
-        return InputImageRotation.rotation0deg;
+  static const _orientations = {
+    DeviceOrientation.portraitUp: 0,
+    DeviceOrientation.landscapeLeft: 90,
+    DeviceOrientation.portraitDown: 180,
+    DeviceOrientation.landscapeRight: 270,
+  };
+
+  InputImageRotation? _rotationFromSensor(CameraDescription camera) {
+    if (Platform.isIOS) {
+      return InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     }
+    final rotationCompensation =
+        _orientations[_controller!.value.deviceOrientation];
+    if (rotationCompensation == null) return null;
+    final isFront = camera.lensDirection == CameraLensDirection.front;
+    final rotation = isFront
+        ? (camera.sensorOrientation + rotationCompensation) % 360
+        : (camera.sensorOrientation - rotationCompensation + 360) % 360;
+    return InputImageRotationValue.fromRawValue(rotation);
   }
 
   Uint8List _concatenatePlanes(List<Plane> planes) {
@@ -156,6 +264,34 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('تصوير السيلفي')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _error = null;
+                    });
+                    _initCamera();
+                  },
+                  child: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (_isLoading || _controller == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

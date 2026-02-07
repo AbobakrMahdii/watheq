@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/network_exceptions.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../models/auth_session.dart';
+import '../models/user_profile.dart';
 
 class AuthService {
   AuthService._();
@@ -98,6 +99,22 @@ class AuthService {
       return false;
     }
   }
+
+  Future<UserProfile> fetchProfile() async {
+    final session = await getSavedSession();
+    if (session == null) {
+      throw AuthException('غير مسجل الدخول');
+    }
+
+    try {
+      final dio = ApiClient(accessToken: session.accessToken).dio;
+      final res = await dio.get('/api/v1/auth/me');
+      return UserProfile.fromJson(res.data as Map<String, dynamic>);
+    } catch (e) {
+      final message = NetworkExceptions.toUserMessage(e);
+      throw AuthException(message, cause: e);
+    }
+  }
 }
 
 class AuthException implements Exception {
@@ -106,4 +123,3 @@ class AuthException implements Exception {
   final String message;
   final Object? cause;
 }
-

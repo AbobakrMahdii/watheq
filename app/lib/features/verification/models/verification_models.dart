@@ -89,6 +89,7 @@ class VerificationRecord {
     this.currentStage,
     this.errorMessage,
     this.resultData,
+    this.createdAt,
   });
 
   final int id;
@@ -96,6 +97,7 @@ class VerificationRecord {
   final VerificationStage? currentStage;
   final String? errorMessage;
   final Map<String, dynamic>? resultData;
+  final DateTime? createdAt;
 
   factory VerificationRecord.fromJson(Map<String, dynamic> json) {
     final currentStageValue = json['current_stage'] as String?;
@@ -105,6 +107,39 @@ class VerificationRecord {
       currentStage: currentStageValue == null ? null : stageFromString(currentStageValue),
       errorMessage: json['error_message'] as String?,
       resultData: json['result_data'] as Map<String, dynamic>?,
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) : null,
+    );
+  }
+}
+
+class VerificationSummary {
+  const VerificationSummary({
+    required this.total,
+    required this.success,
+    required this.failed,
+    required this.running,
+    required this.pending,
+    required this.items,
+  });
+
+  final int total;
+  final int success;
+  final int failed;
+  final int running;
+  final int pending;
+  final List<VerificationRecord> items;
+
+  factory VerificationSummary.fromJson(Map<String, dynamic> json) {
+    final itemsJson = json['items'] as List<dynamic>? ?? [];
+    return VerificationSummary(
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      success: (json['status_counts']?['SUCCESS'] as num?)?.toInt() ?? 0,
+      failed: (json['status_counts']?['FAILED'] as num?)?.toInt() ?? 0,
+      running: (json['status_counts']?['RUNNING'] as num?)?.toInt() ?? 0,
+      pending: (json['status_counts']?['PENDING'] as num?)?.toInt() ?? 0,
+      items: itemsJson
+          .map((e) => VerificationRecord.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

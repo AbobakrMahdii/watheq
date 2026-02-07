@@ -30,6 +30,107 @@ DATABASE_URL = f"mysql+aiomysql://{DB_USER_ESC}:{DB_PASSWORD_ESC}@{DB_HOST}/{DB_
 database = Database(DATABASE_URL)
 
 # =========================
+# Hashes / Documents table
+# =========================
+class DocumentHashesCollection:
+    """
+    تخزين بصمة الملف (SHA-256) مع CID لتفادي التكرار.
+    نستخدم قاعدة البيانات لتسريع التحقق قبل النشر على البلوكشين.
+    """
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    async def _ensure_connected(self) -> None:
+        if not self.db.is_connected:
+            await self.db.connect()
+
+    async def find_by_hash(self, file_hash: str) -> Optional[Dict[str, Any]]:
+        await self._ensure_connected()
+        row = await self.db.fetch_one(
+            "SELECT document_id, hash, ipfs_cid, created_at FROM document_hashes WHERE hash = :h",
+            values={"h": file_hash},
+        )
+        return dict(row) if row else None
+
+    async def insert_one(self, document_id: str, file_hash: str, ipfs_cid: str) -> None:
+        await self._ensure_connected()
+        await self.db.execute(
+            """
+            INSERT INTO document_hashes (document_id, hash, ipfs_cid, created_at)
+            VALUES (:document_id, :hash, :ipfs_cid, NOW())
+            """,
+            values={
+                "document_id": document_id,
+                "hash": file_hash,
+                "ipfs_cid": ipfs_cid,
+            },
+        )
+
+
+_document_hashes_collection: Optional[DocumentHashesCollection] = None
+
+
+def get_document_hashes_collection() -> DocumentHashesCollection:
+    global _document_hashes_collection
+    if _document_hashes_collection is None:
+        _document_hashes_collection = DocumentHashesCollection(database)
+    return _document_hashes_collection
+
+# =========================
+# Biometric audit log table
+# =========================
+class BiometricAuditCollection:
+    """
+    تسجيل نتائج التحقق البيومتري (حيوية + تطابق الوجه) مع عدم تخزين الصور الخام.
+    """
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    async def _ensure_connected(self) -> None:
+        if not self.db.is_connected:
+            await self.db.connect()
+
+    async def insert_one(
+        self,
+        user_id: int,
+        document_id: str,
+        liveness_result: str,
+        match_result: bool,
+        confidence_score: float,
+    ) -> None:
+        await self._ensure_connected()
+        await self.db.execute(
+            """
+            INSERT INTO biometric_audit_log (
+                user_id, document_id, liveness_result,
+                match_result, confidence_score, created_at
+            ) VALUES (
+                :user_id, :document_id, :liveness_result,
+                :match_result, :confidence_score, NOW()
+            )
+            """,
+            values={
+                "user_id": user_id,
+                "document_id": document_id,
+                "liveness_result": liveness_result,
+                "match_result": int(bool(match_result)),
+                "confidence_score": confidence_score,
+            },
+        )
+
+
+_biometric_audit_collection: Optional[BiometricAuditCollection] = None
+
+
+def get_biometric_audit_collection() -> BiometricAuditCollection:
+    global _biometric_audit_collection
+    if _biometric_audit_collection is None:
+        _biometric_audit_collection = BiometricAuditCollection(database)
+    return _biometric_audit_collection
+
+# =========================
 # Users Collection
 # =========================
 class UsersCollection:
@@ -586,6 +687,17 @@ class VerificationsCollection:
             row = await self.db.fetch_one("SELECT COUNT(*) as total FROM verifications")
         return int(row["total"]) if row else 0
 
+    async def count_by_status(self, user_id: int) -> Dict[str, int]:
+        await self._ensure_connected()
+        q = """
+            SELECT status, COUNT(*) as total
+            FROM verifications
+            WHERE user_id = :user_id
+            GROUP BY status
+        """
+        rows = await self.db.fetch_all(q, values={"user_id": user_id})
+        return {row["status"]: int(row["total"]) for row in rows}
+
 
 class VerificationStepsCollection:
     def __init__(self, db: Database):
@@ -813,6 +925,36 @@ async def init_db():
     );
     """
     await database.execute(steps_query)
+
+    # Create document_hashes table for deduplication
+    doc_hash_query = """
+    CREATE TABLE IF NOT EXISTS document_hashes (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        document_id CHAR(36) NOT NULL,
+        hash CHAR(64) NOT NULL UNIQUE,
+        ipfs_cid VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_hash (hash),
+        INDEX idx_doc_id (document_id)
+    );
+    """
+    await database.execute(doc_hash_query)
+
+    # Create biometric audit log table
+    biometric_audit_query = """
+    CREATE TABLE IF NOT EXISTS biometric_audit_log (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        document_id VARCHAR(255) NOT NULL,
+        liveness_result VARCHAR(50) NOT NULL,
+        match_result BOOLEAN NOT NULL,
+        confidence_score DOUBLE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_bio_user (user_id),
+        INDEX idx_bio_doc (document_id)
+    );
+    """
+    await database.execute(biometric_audit_query)
 
 
 
