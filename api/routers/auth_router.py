@@ -29,7 +29,9 @@ async def register(user: UserCreate):
         "username": user.username,
         "email": user.email,
         "password": get_password_hash(user.password),
-        "role": "user"
+        "role": "user",
+        "is_active": True,
+        "deleted_at": None,
     })
 
     return {"message": "registered successfully"}
@@ -70,6 +72,19 @@ async def login(request: Request):
 
     valid_password = False
     if user:
+        is_active = True if user.get("is_active") is None else bool(user.get("is_active"))
+        if user.get("deleted_at") or not is_active:
+            await log_auth_event(
+                request,
+                operation_type="Login",
+                status="failed",
+                failure_reason="User is suspended or deleted",
+                user_identifier=identifier,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail={"message": "Account is suspended", "code": "SUSPENDED"},
+            )
         try:
             valid_password = verify_password(password, user["password"])
         except UnknownHashError:

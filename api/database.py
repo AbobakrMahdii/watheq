@@ -146,15 +146,27 @@ class UsersCollection:
         if not filt:
             return None
         if "_id" in filt:
-            q = "SELECT id as _id, name, username, email, password, role FROM users WHERE id = :id"
+            q = """
+                SELECT id as _id, name, username, email, password, role, is_active, deleted_at
+                FROM users
+                WHERE id = :id AND (deleted_at IS NULL)
+            """
             row = await self.db.fetch_one(q, values={"id": int(filt["_id"])})
             return dict(row) if row else None
         if "username" in filt:
-            q = "SELECT id as _id, name, username, email, password, role FROM users WHERE username = :username"
+            q = """
+                SELECT id as _id, name, username, email, password, role, is_active, deleted_at
+                FROM users
+                WHERE username = :username AND (deleted_at IS NULL)
+            """
             row = await self.db.fetch_one(q, values={"username": filt["username"]})
             return dict(row) if row else None
         if "email" in filt:
-            q = "SELECT id as _id, name, username, email, password, role FROM users WHERE email = :email"
+            q = """
+                SELECT id as _id, name, username, email, password, role, is_active, deleted_at
+                FROM users
+                WHERE email = :email AND (deleted_at IS NULL)
+            """
             row = await self.db.fetch_one(q, values={"email": filt["email"]})
             return dict(row) if row else None
         return None
@@ -163,9 +175,15 @@ class UsersCollection:
         await self._ensure_connected()
         username = doc.get("username")
         if username:
-            q = "INSERT INTO users (name, username, email, password, role) VALUES (:name, :username, :email, :password, :role)"
+            q = """
+                INSERT INTO users (name, username, email, password, role, is_active, deleted_at)
+                VALUES (:name, :username, :email, :password, :role, :is_active, :deleted_at)
+            """
         else:
-            q = "INSERT INTO users (name, email, password, role) VALUES (:name, :email, :password, :role)"
+            q = """
+                INSERT INTO users (name, email, password, role, is_active, deleted_at)
+                VALUES (:name, :email, :password, :role, :is_active, :deleted_at)
+            """
         return await self.db.execute(q, values=doc)
 
     async def update_one(self, filt: Dict[str, Any], update: Dict[str, Any]) -> int:
@@ -201,19 +219,28 @@ class UsersCollection:
                         rows = []
                     else:
                         placeholders = ", ".join([f":v{i}" for i in range(len(vals))])
-                        q = (
-                            "SELECT id as _id, name, username, email, password, role "
-                            f"FROM users WHERE role IN ({placeholders})"
-                        )
+                        q = """
+                            SELECT id as _id, name, username, email, password, role, is_active, deleted_at
+                            FROM users
+                            WHERE role IN (""" + placeholders + """) AND (deleted_at IS NULL)
+                        """
                         rows = await self.db.fetch_all(
                             q,
                             values={f"v{i}": vals[i] for i in range(len(vals))},
                         )
                 else:
-                    q = "SELECT id as _id, name, username, email, password, role FROM users WHERE role = :role"
+                    q = """
+                        SELECT id as _id, name, username, email, password, role, is_active, deleted_at
+                        FROM users
+                        WHERE role = :role AND (deleted_at IS NULL)
+                    """
                     rows = await self.db.fetch_all(q, values={"role": filt["role"]})
             else:
-                q = "SELECT id as _id, name, username, email, password, role FROM users"
+                q = """
+                    SELECT id as _id, name, username, email, password, role, is_active, deleted_at
+                    FROM users
+                    WHERE (deleted_at IS NULL)
+                """
                 rows = await self.db.fetch_all(q)
             for r in rows:
                 yield dict(r)
@@ -832,14 +859,20 @@ async def init_db():
         username VARCHAR(100) UNIQUE,
         email VARCHAR(100) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
-        role VARCHAR(20) NOT NULL
+        role VARCHAR(20) NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        deleted_at TIMESTAMP NULL
     );
     """
     await database.execute(query)
 
-    # Try to add username column on existing deployments (ignore if already exists)
+    # Best-effort migrations
     try:
-        await database.execute("ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE;")
+        await database.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;")
+    except Exception:
+        pass
+    try:
+        await database.execute("ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP NULL;")
     except Exception:
         pass
 

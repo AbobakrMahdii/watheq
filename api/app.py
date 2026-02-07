@@ -163,7 +163,9 @@ async def startup_event():
       username VARCHAR(255) UNIQUE,
       email VARCHAR(255) UNIQUE,
       password VARCHAR(255),
-      role VARCHAR(50)
+      role VARCHAR(50),
+      is_active BOOLEAN DEFAULT TRUE,
+      deleted_at TIMESTAMP NULL
     ) ENGINE=InnoDB;
     """
     try:
@@ -171,6 +173,15 @@ async def startup_event():
     except Exception:
         # non-fatal on startup
         logger.exception("Failed to ensure users table exists")
+    # Best-effort add columns on existing deployments
+    for stmt in [
+        "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP NULL",
+    ]:
+        try:
+            await db_module.database.execute(stmt)
+        except Exception:
+            pass
 
     # ensure document_types table exists
     doc_types_sql = """

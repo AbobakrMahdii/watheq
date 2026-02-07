@@ -10,6 +10,8 @@ type User = {
   username?: string | null;
   email: string;
   role: string;
+  is_active?: boolean;
+  deleted_at?: string | null;
 };
 
 export default function UsersPage() {
@@ -20,6 +22,7 @@ export default function UsersPage() {
 
   const canManageRoles = me?.role === "super_admin";
   const canCreateUsers = me?.role === "admin" || me?.role === "super_admin";
+  const canModerateUsers = me?.role === "admin" || me?.role === "super_admin";
 
   const [formName, setFormName] = useState("");
   const [formUsername, setFormUsername] = useState("");
@@ -94,13 +97,42 @@ export default function UsersPage() {
     }
   }
 
+  async function toggleSuspend(id: string, currentlyActive?: boolean) {
+    if (!canModerateUsers) return toast.error("Admins only");
+    try {
+      const res = await fetch(`/api/admin/users/${id}/${currentlyActive ? "suspend" : "activate"}`, {
+        method: "PUT",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Request failed");
+      toast.success(currentlyActive ? "User suspended" : "User activated");
+      await loadUsers();
+    } catch (e: any) {
+      toast.error(e?.message || "Request failed");
+    }
+  }
+
+  async function softDelete(id: string) {
+    if (!canModerateUsers) return toast.error("Admins only");
+    if (!confirm("Soft delete this user? They will be deactivated but kept in the database.")) return;
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Request failed");
+      toast.success("User soft-deleted");
+      await loadUsers();
+    } catch (e: any) {
+      toast.error(e?.message || "Request failed");
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold">Users</h1>
           <p className="text-sm text-slate-500">
-            Logged in as {me?.email || "—"} ({me?.role || "—"})
+            Logged in as {me?.email || "-"} ({me?.role || "-"})
           </p>
         </div>
         <button
@@ -166,6 +198,7 @@ export default function UsersPage() {
               <th className="py-1">Username</th>
               <th className="py-1">Email</th>
               <th className="py-1">Role</th>
+              <th className="py-1">Status</th>
               <th className="py-1">Actions</th>
             </tr>
           </thead>
@@ -174,16 +207,43 @@ export default function UsersPage() {
               <tr key={u._id} className="border-t">
                 <td className="py-2">{u._id}</td>
                 <td className="py-2">{u.name}</td>
-                <td className="py-2">{u.username || "—"}</td>
+                <td className="py-2">{u.username || "-"}</td>
                 <td className="py-2">{u.email}</td>
                 <td className="py-2">{u.role}</td>
                 <td className="py-2">
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${
+                      u.deleted_at
+                        ? "bg-slate-200 text-slate-600"
+                        : u.is_active === false
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-green-100 text-green-800"
+                    }`}
+                  >
+                    {u.deleted_at ? "Deleted" : u.is_active === false ? "Suspended" : "Active"}
+                  </span>
+                </td>
+                <td className="py-2 space-x-3">
                   <button
                     className="text-sm text-blue-700 hover:underline disabled:opacity-60"
-                    disabled={!canManageRoles || loading}
+                    disabled={!canManageRoles || loading || !!u.deleted_at}
                     onClick={() => promoteToAdmin(u._id)}
                   >
                     Make admin
+                  </button>
+                  <button
+                    className="text-sm text-amber-700 hover:underline disabled:opacity-60"
+                    disabled={!canModerateUsers || loading || !!u.deleted_at}
+                    onClick={() => toggleSuspend(u._id, u.is_active !== false)}
+                  >
+                    {u.is_active === false ? "Activate" : "Suspend"}
+                  </button>
+                  <button
+                    className="text-sm text-red-700 hover:underline disabled:opacity-60"
+                    disabled={!canModerateUsers || loading || !!u.deleted_at}
+                    onClick={() => softDelete(u._id)}
+                  >
+                    Soft delete
                   </button>
                 </td>
               </tr>
