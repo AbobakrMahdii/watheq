@@ -46,8 +46,8 @@ echo Checking database connection...
 REM Start the API server
 echo.
 echo ========================================
-echo Starting API server on http://localhost:8001
-echo API Docs: http://localhost:8001/api/v1/docs
+echo Starting API server on http://localhost:8012
+echo API Docs: http://localhost:8012/api/v1/docs
 echo ========================================
 echo.
 

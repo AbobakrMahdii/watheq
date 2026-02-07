@@ -4,10 +4,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, Form, Query
+import cv2
+import numpy as np
 
 from api.database import get_verifications_collection, get_verification_steps_collection
-from api.models import VerificationPublic, VerificationStepPublic, VerificationStatus
+from api.models import (
+    VerificationListWithStatsResponse,
+    VerificationPublic,
+    VerificationStepPublic,
+    VerificationStatus,
+)
 from api.security import get_current_user
 from api.services.verification_orchestrator import VerificationOrchestrator, VerificationInput
 
@@ -51,7 +58,19 @@ async def start_verification(
     )
 
     storage_dir = Path(__file__).resolve().parents[2] / "storage" / "verifications" / str(verification_id)
-    front_path = _save_upload(document_image_front, storage_dir, "document_front")
+    debug_dir = storage_dir / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    front_bytes = document_image_front.file.read()
+    front_path = storage_dir / "document_front"
+    front_path.write_bytes(front_bytes)
+    image = cv2.imdecode(np.frombuffer(front_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(status_code=400, detail="Invalid document image")
+    print(f"[SERVER] received shape: {image.shape[1]}x{image.shape[0]}")
+    print(f"[SERVER] received bytes: {len(front_bytes)}")
+    cv2.imwrite(str(debug_dir / "input.jpg"), image)
+    cv2.imwrite(str(debug_dir / "server_received.jpg"), image)
     person_path = _save_upload(person_image, storage_dir, "person_image")
     back_path = None
     if document_image_back is not None:
@@ -82,6 +101,38 @@ async def start_verification(
 
     item = await verifications.find_one(verification_id)
     return item
+
+
+@router.get("/my", response_model=VerificationListWithStatsResponse)
+async def list_my_verifications(
+    current_user=Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+):
+    user_id = int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="Invalid user id")
+
+    verifications = get_verifications_collection()
+    offset = (page - 1) * page_size
+    items = await verifications.list_by_user(user_id, limit=page_size, offset=offset)
+    total = await verifications.count(user_id=user_id)
+    status_counts = await verifications.count_by_status(user_id)
+
+    normalized_status_counts = {
+        "SUCCESS": status_counts.get(VerificationStatus.SUCCESS.value, 0),
+        "FAILED": status_counts.get(VerificationStatus.FAILED.value, 0),
+        "RUNNING": status_counts.get(VerificationStatus.RUNNING.value, 0),
+        "PENDING": status_counts.get(VerificationStatus.PENDING.value, 0),
+    }
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+        "status_counts": normalized_status_counts,
+    }
 
 
 @router.get("/{verification_id}", response_model=VerificationPublic)

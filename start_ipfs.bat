@@ -15,8 +15,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Start IPFS using docker-compose
+REM Start IPFS using docker-compose if compose file exists
+set "COMPOSE_FILE=infrastructure\docker-compose.ipfs.yml"
+if not exist "%COMPOSE_FILE%" (
+    echo WARNING: %COMPOSE_FILE% not found. Skipping IPFS startup.
+    goto :EOF
+)
+
 echo Starting IPFS container...
-docker-compose -f infrastructure\docker-compose.ledger.yml up --remove-orphans
+docker-compose -f "%COMPOSE_FILE%" up --remove-orphans
 
 pause
