@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from api.security import get_current_user
 from api.services.liveness_service import simple_liveness_check
 from api.database import get_biometric_audit_collection
-from ai.Biometric.face_service import FaceService
+from Biometric.face_service import FaceService
 
 router = APIRouter(
     prefix="/api/v1/biometric",

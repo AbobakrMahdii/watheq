@@ -8,7 +8,7 @@ logger = logging.getLogger("api.face")
 
 def get_face_service():
     # lazy import to avoid heavy third-party imports at app startup
-    from ai.Biometric.face_service import FaceService
+    from Biometric.face_service import FaceService
     return FaceService()
 
 

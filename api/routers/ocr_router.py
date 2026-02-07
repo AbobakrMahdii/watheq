@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request
-from ai.ocr.vision_service_ocr import ocr_image, ocr_pdf
+from ocr.vision_service_ocr import ocr_image, ocr_pdf
 from api.services.audit_log_service import log_file_event
 
 router = APIRouter()

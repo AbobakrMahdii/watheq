@@ -9,8 +9,8 @@ import cv2
 import numpy as np
 
 from ledger.ipfs_service import IPFSService
-from ai.Biometric.face_service import FaceService
-from ai.ocr.vision_service_ocr import ocr_image, ocr_pdf
+from Biometric.face_service import FaceService
+from ocr.vision_service_ocr import ocr_image, ocr_pdf
 from api.services.fabric_service import fabric_invoke
 
 QUALITY_BRIGHTNESS_MIN = 40
