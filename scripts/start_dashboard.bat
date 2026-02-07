@@ -4,7 +4,7 @@ echo ========================================
 echo Starting Watheq Admin Dashboard...
 echo ========================================
 
-cd /d "%~dp0\dashboard"
+cd /d "%~dp0..\dashboard"
 
 REM Check if Node.js is installed
 node --version >nul 2>&1

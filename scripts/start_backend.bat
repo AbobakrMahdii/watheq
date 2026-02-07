@@ -4,14 +4,14 @@ echo ========================================
 echo Starting Watheq Backend API...
 echo ========================================
 
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 REM Use single project virtual environment in root
-set "VENV_DIR=%~dp0.venv"
+set "VENV_DIR=%~dp0../.venv"
 set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
 set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
-set "REQ_UNIFIED=%~dp0requirements.unified.txt"
-set "REQ_API=%~dp0api\requirements.txt"
+set "REQ_UNIFIED=%~dp0../requirements.unified.txt"
+set "REQ_API=%~dp0../api\requirements.txt"
 
 REM Check if Python 3.11 is available
 py -3.11 --version >nul 2>&1

@@ -4,7 +4,7 @@ echo ========================================
 echo Starting IPFS Service...
 echo ========================================
 
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 REM Check if Docker is installed and running
 docker --version >nul 2>&1
@@ -16,7 +16,7 @@ if errorlevel 1 (
 )
 
 REM Start IPFS using docker-compose if compose file exists
-set "COMPOSE_FILE=infrastructure\docker-compose.ipfs.yml"
+set "COMPOSE_FILE=%~dp0..\infrastructure\docker-compose.ipfs.yml"
 if not exist "%COMPOSE_FILE%" (
     echo WARNING: %COMPOSE_FILE% not found. Skipping IPFS startup.
     goto :EOF

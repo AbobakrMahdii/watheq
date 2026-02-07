@@ -4,8 +4,8 @@ REM Opens separate cmd windows for IPFS, Blockchain (if available), and API
 
 setlocal
 
-REM Root directory of repository (folder containing this script)
-set ROOT_DIR=%~dp0
+REM Root directory of repository (parent folder of scripts/)
+set ROOT_DIR=%~dp0..
 
 echo Repository root: %ROOT_DIR%
 

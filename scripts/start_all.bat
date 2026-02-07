@@ -5,7 +5,17 @@ echo Starting All Watheq Services
 echo ========================================
 echo.
 
-cd /d "%~dp0"
+cd /d "%~dp0.."
+
+REM Run AI training for any untrained document types (skips already trained)
+echo [0/3] Checking AI models...
+python ai\train_ai.py --all 2>nul
+if errorlevel 0 (
+    echo      AI models ready.
+) else (
+    echo      Warning: AI training check failed. Continuing anyway...
+)
+echo.
 
 REM Start IPFS in a new window (optional; skips silently if compose file missing)
 echo [1/3] Starting IPFS...
