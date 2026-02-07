@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 type DocumentType = {
   id: number;
   name: string;
+  folder_name: string;
   is_active: boolean;
   requires_back_image: boolean;
   created_at: string;
@@ -16,12 +17,14 @@ type DocumentType = {
 
 type DocumentTypeCreatePayload = {
   name: string;
+  folder_name: string;
   is_active?: boolean;
   requires_back_image?: boolean;
 };
 
 type DocumentTypeUpdatePayload = {
   name?: string;
+  folder_name?: string;
   is_active?: boolean;
   requires_back_image?: boolean;
 };
@@ -31,6 +34,7 @@ export default function DocumentTypesPage() {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(false);
   const [formName, setFormName] = useState("");
+  const [formFolderName, setFormFolderName] = useState("");
   const [formIsActive, setFormIsActive] = useState(true);
   const [formRequiresBackImage, setFormRequiresBackImage] = useState(false);
   const [editingDocTypeId, setEditingDocTypeId] = useState<number | null>(null);
@@ -56,6 +60,7 @@ export default function DocumentTypesPage() {
 
   function resetForm() {
     setFormName("");
+    setFormFolderName("");
     setFormIsActive(true);
     setFormRequiresBackImage(false);
     setEditingDocTypeId(null);
@@ -66,12 +71,16 @@ export default function DocumentTypesPage() {
     if (!formName.trim()) {
       return toast.error("Document type name is required");
     }
+    if (!formFolderName.trim()) {
+      return toast.error("Folder name is required");
+    }
 
     setLoading(true);
     try {
       let res: Response;
       let payload: DocumentTypeCreatePayload | DocumentTypeUpdatePayload = {
         name: formName.trim(),
+        folder_name: formFolderName.trim(),
         is_active: formIsActive,
         requires_back_image: formRequiresBackImage,
       };
@@ -147,6 +156,7 @@ export default function DocumentTypesPage() {
   function startEditing(docType: DocumentType) {
     setEditingDocTypeId(docType.id);
     setFormName(docType.name);
+    setFormFolderName(docType.folder_name);
     setFormIsActive(docType.is_active);
     setFormRequiresBackImage(docType.requires_back_image);
   }
@@ -172,6 +182,18 @@ export default function DocumentTypesPage() {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+                required
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Folder Name</label>
+              <input
+                type="text"
+                value={formFolderName}
+                onChange={(e) => setFormFolderName(e.target.value)}
+                className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+                placeholder="e.g., identity, passport"
                 required
                 disabled={loading}
               />
@@ -230,6 +252,7 @@ export default function DocumentTypesPage() {
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Folder</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Active</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Back Image</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created At</th>
@@ -241,6 +264,9 @@ export default function DocumentTypesPage() {
                   <tr key={docType.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docType.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{docType.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                      <code className="bg-slate-100 px-2 py-1 rounded text-xs">{docType.folder_name}</code>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${docType.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                         {docType.is_active ? "Yes" : "No"}
