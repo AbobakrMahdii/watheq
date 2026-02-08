@@ -51,7 +51,7 @@ export default function DashboardSidebar() {
   }
 
   return (
-    <aside className="min-h-screen w-64 border-r bg-white p-4">
+    <aside className="h-full w-64 shrink-0 overflow-y-auto border-r bg-white p-4">
       <div className="mb-6">
         <div className="text-sm text-slate-500">Signed in as</div>
         <div className="truncate font-medium">{me?.email || "—"}</div>

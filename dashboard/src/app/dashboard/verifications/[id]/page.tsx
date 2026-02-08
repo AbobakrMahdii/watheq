@@ -272,13 +272,31 @@ export default function VerificationDetailPage() {
             <CardTitle>مطابقة البيانات</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <div>{dataV.citizen_found ? "✅ تم العثور على سجل المواطن" : "❌ لم يتم العثور على سجل"}</div>
+            {dataV.fraud_suspected && (
+              <div className="mb-2 rounded border border-red-300 bg-red-50 p-2 font-semibold text-red-700">
+                🚨 محاولة احتيال — بيانات الوثيقة لا تطابق السجل المحفوظ
+              </div>
+            )}
+            {dataV.new_record_created && (
+              <div className="mb-2 rounded border border-blue-300 bg-blue-50 p-2 text-blue-700">
+                ℹ️ سجل مواطن جديد — تم حفظ البيانات المستخرجة لأول مرة
+              </div>
+            )}
+            <div>
+              {dataV.citizen_found
+                ? "✅ تم العثور على سجل المواطن"
+                : dataV.new_record_created
+                  ? "🆕 لم يوجد سجل سابق — تم إنشاء سجل جديد"
+                  : "❌ لم يتم العثور على سجل"}
+            </div>
             {dataV.message && <div className="text-slate-600">{dataV.message}</div>}
             {dataV.match_details &&
               Object.entries(dataV.match_details).map(([key, val]: [string, any]) => (
                 <div key={key} className="flex items-center gap-2">
                   <span>{val?.match ? "✅" : "❌"}</span>
-                  <span>{key}</span>
+                  <span className="font-medium">{key}</span>
+                  {val?.ocr && <span className="text-xs text-slate-400">(OCR: {val.ocr})</span>}
+                  {val?.db && <span className="text-xs text-slate-400">(سجل: {val.db})</span>}
                 </div>
               ))}
           </CardContent>
