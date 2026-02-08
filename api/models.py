@@ -19,6 +19,11 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserInDB(BaseModel):
     id: Optional[str]
     name: str
