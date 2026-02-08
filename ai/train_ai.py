@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """
-Watheq AI Training Script (v2 — YOLOv8 + Siamese Network)
+Watheq AI Training Script (v3 — Binary Classifiers + Font Profiles)
 
 خط أنابيب التدريب:
-1. تحميل الصور المرجعية من ai/data/refrences/{doc_type}/
-2. توليد بيانات التدريب المعززة (augmented + synthetic forgeries)
-3. تدريب YOLOv8 لكشف العناصر (اختياري — يتطلب YOLO annotations)
-4. تدريب شبكة سيامية للتحقق من الأصالة
-5. توليد تضمينات مرجعية لكل عنصر
+1. قراءة layout_config.yaml لكل نوع وثيقة
+2. ربط الصور المرجعية بأسماء العناصر الصحيحة
+3. توليد بيانات تدريب معززة (augmented + synthetic forgeries) بالألوان
+4. تدريب مصنف ثنائي حقيقي (EfficientNet-B0) لكل عنصر — أصلي/مزور
+5. تعلم خصائص الخطوط للمناطق النصية
+6. حفظ الأوزان المدربة + ملفات الخطوط + التكوين
+
+The trained models make verification decisions from what they LEARNED,
+not by comparing against reference images at runtime.
 
 Usage:
     python ai/train_ai.py --list
     python ai/train_ai.py --all
     python ai/train_ai.py --all --force
     python ai/train_ai.py --type identity
-    python ai/train_ai.py --type identity --element logo_main
-    python ai/train_ai.py --type identity --embeddings-only
+    python ai/train_ai.py --type identity --element logo
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import yaml
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -40,45 +45,83 @@ TRAINING_DIR = AI_DIR / "data" / "training"
 MODELS_DIR = AI_DIR / "models"
 WEIGHTS_DIR = MODELS_DIR / "weights"
 EMBEDDINGS_DIR = MODELS_DIR / "embeddings"
+FONTS_DIR = MODELS_DIR / "fonts"
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
-MIN_SAMPLES_RECOMMENDED = 400
 
 # Ensure imports
 sys.path.insert(0, str(AI_DIR))
 sys.path.insert(0, str(AI_DIR.parent))
 
 
+# ───────────────────────── Layout Config ─────────────────────────
+
+def load_layout_config(doc_type: str) -> Optional[Dict[str, Any]]:
+    """Load layout_config.yaml for a document type."""
+    config_path = REFERENCES_DIR / doc_type / "layout_config.yaml"
+    if not config_path.exists():
+        logger.warning(f"No layout_config.yaml for {doc_type}")
+        return None
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def get_elements_from_config(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract all element definitions from layout config (visual + text)."""
+    elements = []
+    for ref_stem, elem_data in config.get("elements", {}).items():
+        elements.append({
+            "ref_stem": ref_stem,
+            "class_name": elem_data["class_name"],
+            "ref_file": elem_data.get("ref_file"),
+            "roi": elem_data.get("roi", {}),
+            "tolerance": elem_data.get("tolerance", 0.10),
+            "weight": elem_data.get("weight", 1.0),
+            "critical": elem_data.get("critical", False),
+            "type": elem_data.get("type", "visual"),
+        })
+    for text_name, text_data in config.get("text_regions", {}).items():
+        elements.append({
+            "ref_stem": text_name,
+            "class_name": text_data["class_name"],
+            "ref_file": None,
+            "roi": text_data.get("roi", {}),
+            "tolerance": text_data.get("tolerance", 0.12),
+            "weight": text_data.get("weight", 1.0),
+            "critical": text_data.get("critical", False),
+            "type": "text",
+        })
+    return elements
+
+
+# ───────────────────────── Discovery ─────────────────────────
+
 def discover_doc_types() -> List[str]:
     """Discover all document types from reference images directory."""
     if not REFERENCES_DIR.exists():
         return []
-    return sorted([item.name for item in REFERENCES_DIR.iterdir() if item.is_dir()])
+    return sorted([
+        item.name for item in REFERENCES_DIR.iterdir()
+        if item.is_dir() and (item / "layout_config.yaml").exists()
+    ])
 
 
-def discover_elements(doc_type: str) -> List[str]:
-    """Discover all reference elements for a document type."""
-    doc_dir = REFERENCES_DIR / doc_type
-    if not doc_dir.exists():
-        return []
-    return sorted(
-        [
-            item.stem
-            for item in doc_dir.iterdir()
-            if item.is_file() and item.suffix.lower() in IMAGE_EXTENSIONS
-        ]
-    )
-
-
-def get_reference_path(doc_type: str, element: str) -> Optional[Path]:
-    """Get the full path to reference image for an element."""
+def get_reference_path(doc_type: str, ref_file: str) -> Optional[Path]:
+    """Get the full path to a reference image file."""
+    ref_path = REFERENCES_DIR / doc_type / ref_file
+    if ref_path.exists():
+        return ref_path
+    # Try other extensions
+    stem = Path(ref_file).stem
     doc_dir = REFERENCES_DIR / doc_type
     for ext in IMAGE_EXTENSIONS:
-        ref_path = doc_dir / f"{element}{ext}"
-        if ref_path.exists():
-            return ref_path
+        p = doc_dir / f"{stem}{ext}"
+        if p.exists():
+            return p
     return None
 
+
+# ───────────────────────── Training Config ─────────────────────────
 
 def load_training_config(doc_type: str) -> Optional[Dict[str, Any]]:
     """Load existing training config for a document type."""
@@ -97,35 +140,33 @@ def save_training_config(doc_type: str, config: Dict[str, Any]) -> None:
         json.dump(config, f, indent=2, default=str)
 
 
-def generate_augmented_data(
-    doc_type: str, element: str, force: bool = False
-) -> Dict[str, Any]:
-    """
-    Generate augmented training data for an element.
+# ───────────────────────── Data Generation ─────────────────────────
 
-    Step 1: Creates genuine augmentations from reference
-    Step 2: Creates synthetic forgeries
-    """
-    ref_path = get_reference_path(doc_type, element)
+def generate_augmented_data(
+    doc_type: str, ref_stem: str, ref_file: str, force: bool = False
+) -> Dict[str, Any]:
+    """Generate augmented training data for a visual element."""
+    ref_path = get_reference_path(doc_type, ref_file)
     if ref_path is None:
         return {
             "status": "error",
-            "message": f"Reference image not found for {element}",
-            "element": element,
+            "message": f"Reference image not found: {ref_file}",
+            "element": ref_stem,
         }
 
-    output_dir = TRAINING_DIR / doc_type / element
+    output_dir = TRAINING_DIR / doc_type / ref_stem
     if output_dir.exists() and (output_dir / "genuine.txt").exists() and not force:
+        # Count existing files
+        gen_count = len(list((output_dir / "out_genuine").glob("*.png"))) if (output_dir / "out_genuine").exists() else 0
+        forg_count = len(list((output_dir / "out_forged").glob("*.png"))) if (output_dir / "out_forged").exists() else 0
         return {
-            "status": "success",
-            "message": "Data already generated (use --force to overwrite)",
-            "element": element,
-            "reference_path": str(ref_path),
-            "output_dir": str(output_dir),
+            "status": "skipped",
+            "message": f"Data exists ({gen_count}g + {forg_count}f). Use --force to regenerate.",
+            "element": ref_stem,
         }
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("  Generating augmented data for %s...", element)
+    logger.info(f"  Generating augmented data for {ref_stem} (from {ref_file})...")
 
     try:
         from generate_synthetic_data import generate_separate
@@ -133,223 +174,340 @@ def generate_augmented_data(
         generate_separate(ref_path, output_dir, n_genuine=400, n_forged=400)
         return {
             "status": "success",
-            "element": element,
+            "element": ref_stem,
             "reference_path": str(ref_path),
             "output_dir": str(output_dir),
             "generated_at": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"Failed to generate data for {element}: {e}")
-        return {"status": "error", "message": str(e), "element": element}
+        logger.error(f"Failed to generate data for {ref_stem}: {e}")
+        return {"status": "error", "message": str(e), "element": ref_stem}
 
 
-def generate_reference_embeddings(doc_type: str, elements: List[str]) -> Dict[str, Any]:
-    """
-    Generate reference embeddings for each element using the Siamese verifier.
+# ───────────────────────── Classifier Training ─────────────────────────
 
-    Step 5: For each element, load genuine augmented samples, compute mean embedding,
-    and save to ai/models/embeddings/{doc_type}/{element}.npy
-    """
-    import cv2
-    import numpy as np
+def train_element_classifier(
+    doc_type: str, ref_stem: str, class_name: str, layout_config: Dict
+) -> Dict[str, Any]:
+    """Train a binary classifier for one visual element."""
+    from ai.models.element_classifier import ElementClassifier
 
-    from ai.models.siamese_verifier import SiameseVerifier
+    genuine_dir = TRAINING_DIR / doc_type / ref_stem / "out_genuine"
+    forged_dir = TRAINING_DIR / doc_type / ref_stem / "out_forged"
 
-    # Load verifier (fallback mode if no trained model yet)
-    model_path = WEIGHTS_DIR / f"siamese_{doc_type}.pt"
-    verifier = SiameseVerifier(
-        model_path=model_path if model_path.exists() else None,
-        embeddings_dir=None,  # Don't load existing embeddings
+    if not genuine_dir.exists() or not forged_dir.exists():
+        return {
+            "status": "error",
+            "message": f"Training data not found for {ref_stem}",
+            "class_name": class_name,
+        }
+
+    save_path = WEIGHTS_DIR / f"{doc_type}_{class_name}.pt"
+    training_params = layout_config.get("training", {})
+
+    logger.info(f"  Training classifier for {class_name} (from {ref_stem})...")
+
+    classifier = ElementClassifier()
+    result = classifier.train_from_dirs(
+        genuine_dir=genuine_dir,
+        forged_dir=forged_dir,
+        save_path=save_path,
+        epochs=training_params.get("epochs", 20),
+        batch_size=training_params.get("batch_size", 32),
+        lr=training_params.get("learning_rate", 1e-4),
+        val_split=training_params.get("val_split", 0.2),
+        patience=training_params.get("early_stopping_patience", 5),
     )
 
-    results = {}
-    for element in elements:
-        ref_path = get_reference_path(doc_type, element)
-        if ref_path is None:
-            results[element] = {"status": "error", "message": "No reference image"}
-            continue
+    if result["status"] == "success":
+        logger.info(
+            f"  ✓ {class_name}: val_acc={result['best_val_acc']:.1%} "
+            f"({result['epochs_trained']} epochs)"
+        )
+    else:
+        logger.error(f"  ✗ {class_name}: {result.get('message', 'unknown error')}")
 
-        # Collect images: original reference + genuine augmentations
-        images = []
+    result["class_name"] = class_name
+    result["ref_stem"] = ref_stem
+    result["weight_path"] = str(save_path)
+    return result
 
-        # Load original reference
-        img = cv2.imread(str(ref_path))
-        if img is not None:
-            images.append(img)
 
-        # Load genuine augmented samples (up to 50)
-        genuine_dir = TRAINING_DIR / doc_type / element / "out_genuine"
-        if genuine_dir.exists():
-            for i, p in enumerate(sorted(genuine_dir.glob("*.png"))[:50]):
-                aug_img = cv2.imread(str(p))
-                if aug_img is not None:
-                    # Convert grayscale to BGR if needed
-                    if len(aug_img.shape) == 2:
-                        aug_img = cv2.cvtColor(aug_img, cv2.COLOR_GRAY2BGR)
-                    images.append(aug_img)
+# ───────────────────────── Font Profile Learning ─────────────────────────
 
-        if not images:
-            results[element] = {"status": "error", "message": "No images to embed"}
-            continue
+def learn_text_font_profile(
+    doc_type: str, class_name: str, roi: Dict[str, float]
+) -> Dict[str, Any]:
+    """Learn font profile for a text region from the full reference document."""
+    import cv2
+    import numpy as np
+    from ai.models.font_analyzer import FontAnalyzer
 
-        try:
-            embedding = verifier.generate_reference_embedding(
-                images, element, doc_type, output_dir=EMBEDDINGS_DIR
-            )
-            results[element] = {
-                "status": "success",
-                "images_used": len(images),
-                "embedding_shape": list(embedding.shape),
-            }
-        except Exception as e:
-            results[element] = {"status": "error", "message": str(e)}
+    # Find the full document reference image
+    ref_dir = REFERENCES_DIR / doc_type
+    full_ref = None
+    for ext in IMAGE_EXTENSIONS:
+        for name in ["full", "document", "front"]:
+            p = ref_dir / f"{name}{ext}"
+            if p.exists():
+                full_ref = p
+                break
+        if full_ref:
+            break
 
-    return results
+    if full_ref is None:
+        return {
+            "status": "error",
+            "class_name": class_name,
+            "message": "No full document reference image found",
+        }
 
+    # Load and crop text region
+    img = cv2.imdecode(np.fromfile(str(full_ref), dtype=np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return {
+            "status": "error",
+            "class_name": class_name,
+            "message": f"Cannot read: {full_ref}",
+        }
+
+    h, w = img.shape[:2]
+    x0 = int(roi.get("x", 0) * w)
+    y0 = int(roi.get("y", 0) * h)
+    rw = int(roi.get("w", 0.1) * w)
+    rh = int(roi.get("h", 0.1) * h)
+    x1 = min(w, x0 + rw)
+    y1 = min(h, y0 + rh)
+
+    text_crop = img[y0:y1, x0:x1]
+    if text_crop.size == 0:
+        return {
+            "status": "error",
+            "class_name": class_name,
+            "message": "Empty text region crop",
+        }
+
+    # Learn font profile
+    analyzer = FontAnalyzer()
+    profile = analyzer.learn_font_profile(text_crop, class_name, doc_type)
+
+    # Save profile
+    profile_path = FONTS_DIR / f"{doc_type}_{class_name}.json"
+    FontAnalyzer.save_profile(profile, profile_path)
+
+    return {
+        "status": "success",
+        "class_name": class_name,
+        "profile_path": str(profile_path),
+        "ink_density": profile.ink_density,
+        "stroke_width": profile.stroke_width_mean,
+    }
+
+
+# ───────────────────────── Main Training Orchestrator ─────────────────────────
 
 def train_doc_type(
     doc_type: str,
     specific_element: Optional[str] = None,
     force: bool = False,
-    embeddings_only: bool = False,
 ) -> Dict[str, Any]:
     """
     Train all models for a document type.
 
     Steps:
-    1. Discover elements from reference images
-    2. Generate augmented training data (genuine + forged)
-    3. Generate reference embeddings using Siamese verifier
-    4. Save training config
+    1. Load layout_config.yaml
+    2. Map element names correctly
+    3. Generate augmented training data (RGB)
+    4. Train binary classifiers per visual element
+    5. Learn font profiles for text regions
+    6. Save training config with learned layout positions
     """
-    elements = discover_elements(doc_type)
+    layout_config = load_layout_config(doc_type)
+    if layout_config is None:
+        return {
+            "status": "error",
+            "doc_type": doc_type,
+            "message": "No layout_config.yaml found. Create one in ai/data/refrences/{doc_type}/",
+        }
+
+    elements = get_elements_from_config(layout_config)
     if not elements:
         return {
             "status": "error",
             "doc_type": doc_type,
-            "message": "No reference elements found",
+            "message": "No elements defined in layout_config.yaml",
         }
 
     if specific_element:
-        if specific_element not in elements:
+        elements = [e for e in elements if e["ref_stem"] == specific_element or e["class_name"] == specific_element]
+        if not elements:
+            all_names = [e["ref_stem"] for e in get_elements_from_config(layout_config)]
             return {
                 "status": "error",
                 "doc_type": doc_type,
-                "message": f"Element '{specific_element}' not found. Available: {elements}",
+                "message": f"Element '{specific_element}' not found. Available: {all_names}",
             }
-        elements = [specific_element]
 
     logger.info(f"\n{'='*60}")
     logger.info(f"Training: {doc_type} ({len(elements)} elements)")
     logger.info(f"{'='*60}")
 
-    # Step 1 & 2: Generate augmented data
     augmentation_results = {}
-    if not embeddings_only:
-        for element in elements:
-            logger.info(f"  [{element}] Generating augmented data...")
-            result = generate_augmented_data(doc_type, element, force=force)
-            augmentation_results[element] = result
-            status = result["status"]
-            logger.info(f"  [{element}] {status}: {result.get('message', 'OK')}")
+    classifier_results = {}
+    font_results = {}
 
-    # Step 3: Generate reference embeddings
-    logger.info(f"\n  Generating reference embeddings...")
-    embedding_results = generate_reference_embeddings(doc_type, elements)
+    for elem in elements:
+        ref_stem = elem["ref_stem"]
+        class_name = elem["class_name"]
+        elem_type = elem["type"]
 
-    for elem, res in embedding_results.items():
-        status = res["status"]
-        msg = res.get("message", f"{res.get('images_used', 0)} images")
-        logger.info(f"  [{elem}] Embedding: {status} ({msg})")
+        if elem_type == "visual" and elem.get("ref_file"):
+            # Step 1: Generate augmented data
+            logger.info(f"\n  [{ref_stem} → {class_name}] Visual element")
+            aug_result = generate_augmented_data(
+                doc_type, ref_stem, elem["ref_file"], force=force
+            )
+            augmentation_results[ref_stem] = aug_result
+            logger.info(f"    Data: {aug_result['status']} — {aug_result.get('message', 'OK')}")
 
-    # Step 4: Save training config
-    thresholds = {elem: 0.50 for elem in elements}
+            # Step 2: Train binary classifier
+            cls_result = train_element_classifier(
+                doc_type, ref_stem, class_name, layout_config
+            )
+            classifier_results[class_name] = cls_result
+
+        elif elem_type == "text":
+            # Step 3: Learn font profile from the full reference document
+            logger.info(f"\n  [{class_name}] Text region — learning font profile")
+            font_result = learn_text_font_profile(
+                doc_type, class_name, elem["roi"]
+            )
+            font_results[class_name] = font_result
+            logger.info(f"    Font: {font_result['status']}")
+
+    # Step 4: Save training config with layout positions
+    learned_layout = {}
+    for elem in elements:
+        learned_layout[elem["class_name"]] = {
+            "roi": elem["roi"],
+            "tolerance": elem["tolerance"],
+            "weight": elem["weight"],
+            "critical": elem["critical"],
+            "type": elem["type"],
+            "ref_stem": elem["ref_stem"],
+        }
+
     config = {
         "doc_type": doc_type,
-        "elements": elements,
-        "thresholds": thresholds,
+        "version": "3.0",
+        "model": "ElementClassifier (EfficientNet-B0 binary)",
         "trained_at": datetime.now().isoformat(),
-        "version": "2.0",
-        "model": "YOLOv8 + Siamese (EfficientNet-B0)",
+        "layout": learned_layout,
+        "thresholds": {
+            "pass_score": layout_config.get("thresholds", {}).get("pass_score", 0.85),
+            "suspicious_score": layout_config.get("thresholds", {}).get("suspicious_score", 0.60),
+        },
         "augmentation_results": augmentation_results,
-        "embedding_results": embedding_results,
+        "classifier_results": {
+            k: {sk: sv for sk, sv in v.items() if sk != "history"}
+            for k, v in classifier_results.items()
+        },
+        "font_results": font_results,
     }
     save_training_config(doc_type, config)
 
-    success_count = sum(
-        1 for r in embedding_results.values() if r["status"] == "success"
-    )
+    # Summary
+    cls_success = sum(1 for r in classifier_results.values() if r.get("status") == "success")
+    font_success = sum(1 for r in font_results.values() if r.get("status") == "success")
+    total = len(elements)
+
+    logger.info(f"\n{'─'*60}")
+    logger.info(f"  {doc_type}: {cls_success} classifiers trained, {font_success} font profiles learned")
+    logger.info(f"{'─'*60}")
 
     return {
-        "status": "success" if success_count == len(elements) else "partial",
+        "status": "success" if (cls_success + font_success) == total else "partial",
         "doc_type": doc_type,
-        "elements_trained": success_count,
-        "elements_total": len(elements),
-        "embedding_results": embedding_results,
+        "classifiers_trained": cls_success,
+        "font_profiles_learned": font_success,
+        "elements_total": total,
+        "classifier_results": classifier_results,
+        "font_results": font_results,
     }
 
 
-def train_all(force: bool = False, embeddings_only: bool = False) -> List[Dict]:
+def train_all(force: bool = False) -> List[Dict]:
     """Train all discovered document types."""
     doc_types = discover_doc_types()
     if not doc_types:
-        logger.warning("No document types found in references directory")
+        logger.warning("No document types found with layout_config.yaml")
         return []
 
     results = []
     for doc_type in doc_types:
         existing = load_training_config(doc_type)
-        if (
-            existing
-            and not force
-            and not embeddings_only
-            and existing.get("version") == "2.0"
-        ):
-            logger.info(f"Skipping {doc_type} (already trained v2.0, use --force)")
-            results.append(
-                {
-                    "status": "skipped",
-                    "doc_type": doc_type,
-                    "message": "Already trained v2.0",
-                    "trained_at": existing.get("trained_at"),
-                }
-            )
+        if existing and not force and existing.get("version") == "3.0":
+            logger.info(f"Skipping {doc_type} (already trained v3.0, use --force)")
+            results.append({
+                "status": "skipped",
+                "doc_type": doc_type,
+                "message": "Already trained v3.0",
+                "trained_at": existing.get("trained_at"),
+            })
             continue
 
-        result = train_doc_type(doc_type, force=force, embeddings_only=embeddings_only)
+        result = train_doc_type(doc_type, force=force)
         results.append(result)
 
     return results
 
 
+# ───────────────────────── CLI ─────────────────────────
+
 def list_doc_types():
-    """List all document types and their elements."""
+    """List all document types, elements, and training status."""
     doc_types = discover_doc_types()
     if not doc_types:
-        print("No document types found in ai/data/refrences/")
+        # Also check for dirs without config
+        all_dirs = [d.name for d in REFERENCES_DIR.iterdir() if d.is_dir()] if REFERENCES_DIR.exists() else []
+        if all_dirs:
+            print(f"\nDocument type folders found: {all_dirs}")
+            print("But none have layout_config.yaml. Create one to enable training.")
+        else:
+            print("No document types found in ai/data/refrences/")
         return
 
     print(f"\n{'='*60}")
-    print(f"  Watheq AI — Document Types")
+    print(f"  Watheq AI — Document Types (v3)")
     print(f"{'='*60}\n")
 
     for dt in doc_types:
-        elements = discover_elements(dt)
         config = load_training_config(dt)
-        trained = "✓" if config else "✗"
-        version = config.get("version", "?") if config else "—"
+        layout = load_layout_config(dt)
+        trained = "✓" if config and config.get("version") == "3.0" else "✗"
+        version = config.get("version", "—") if config else "—"
         print(f"  {trained} {dt} (v{version})")
-        for elem in elements:
-            ref = get_reference_path(dt, elem)
-            emb_path = EMBEDDINGS_DIR / dt / f"{elem}.npy"
-            emb_status = "✓" if emb_path.exists() else "✗"
-            print(f"      {emb_status} {elem} ({ref.suffix if ref else '?'})")
+
+        if layout:
+            elements = get_elements_from_config(layout)
+            for elem in elements:
+                class_name = elem["class_name"]
+                elem_type = elem["type"]
+                weight_path = WEIGHTS_DIR / f"{dt}_{class_name}.pt"
+                font_path = FONTS_DIR / f"{dt}_{class_name}.json"
+
+                if elem_type == "visual":
+                    status = "✓" if weight_path.exists() else "✗"
+                    print(f"      {status} {elem['ref_stem']} → {class_name} [classifier]")
+                else:
+                    status = "✓" if font_path.exists() else "✗"
+                    print(f"      {status} {class_name} [font profile]")
     print()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Watheq AI Training (v2 — YOLOv8 + Siamese)",
+        description="Watheq AI Training (v3 — Binary Classifiers + Font Profiles)",
     )
     parser.add_argument("--list", "-l", action="store_true", help="List document types")
     parser.add_argument(
@@ -358,9 +516,6 @@ def main():
     parser.add_argument("--force", "-f", action="store_true", help="Force retrain")
     parser.add_argument("--type", "-t", type=str, help="Train specific document type")
     parser.add_argument("--element", "-e", type=str, help="Train specific element")
-    parser.add_argument(
-        "--embeddings-only", action="store_true", help="Only generate embeddings"
-    )
     args = parser.parse_args()
 
     if args.list:
@@ -368,13 +523,18 @@ def main():
         return
 
     if args.all:
-        results = train_all(force=args.force, embeddings_only=args.embeddings_only)
+        results = train_all(force=args.force)
         print(f"\n{'─'*60}")
         print(f"  Training complete: {len(results)} document types processed")
         for r in results:
             status = r["status"]
             dt = r.get("doc_type", "?")
-            print(f"    {status}: {dt}")
+            if status == "success" or status == "partial":
+                cls = r.get("classifiers_trained", 0)
+                font = r.get("font_profiles_learned", 0)
+                print(f"    {status}: {dt} ({cls} classifiers, {font} font profiles)")
+            else:
+                print(f"    {status}: {dt}")
         return
 
     if args.type:
@@ -382,7 +542,6 @@ def main():
             args.type,
             specific_element=args.element,
             force=args.force,
-            embeddings_only=args.embeddings_only,
         )
         print(json.dumps(result, indent=2, default=str))
         return
