@@ -14,3 +14,9 @@ C:\Python313\Lib\site-packages\aiomysql\cursors.py:239: Warning: Table 'verifica
   await self._query(query)
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8010 (Press CTRL+C to quit)
+2026-02-08 03:21:47,526  WARNING   tensorflow  From C:\Users\Abobakr_Mahdi\Desktop\watheq\.venv\Lib\site-packages\tf_keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2026-02-08 04:28:33,435  WARNING   tensorflow  From C:\Users\Abobakr_Mahdi\Desktop\watheq\.venv\Lib\site-packages\tf_keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2026-02-08 04:53:26,663  WARNING   tensorflow  From C:\Users\Abobakr_Mahdi\Desktop\watheq\.venv\Lib\site-packages\tf_keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
