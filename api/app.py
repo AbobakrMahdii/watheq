@@ -25,6 +25,7 @@ from .routers.admin_verification_router import router as admin_verification_rout
 from .routers.blockchain_router import router as blockchain_router
 from .routers.biometric_router import router as biometric_router
 from .routers.notification_router import router as notification_router
+from .routers.admin_citizen_router import router as admin_citizen_router
 from .security import get_current_user, get_current_admin, get_password_hash
 from . import database as db_module
 from .services.audit_log_service import log_request_event
@@ -107,6 +108,7 @@ app.include_router(admin_verification_router)
 app.include_router(blockchain_router)
 app.include_router(biometric_router)
 app.include_router(notification_router)
+app.include_router(admin_citizen_router)
 
 
 def custom_openapi():
