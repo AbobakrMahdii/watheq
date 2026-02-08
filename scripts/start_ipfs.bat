@@ -22,7 +22,29 @@ if not exist "%COMPOSE_FILE%" (
     goto :EOF
 )
 
-echo Starting IPFS container...
-docker-compose -f "%COMPOSE_FILE%" up --remove-orphans
+REM Remove any stale container from previous runs
+docker rm -f ipfs-node >nul 2>&1
 
-pause
+echo Starting IPFS container...
+docker-compose -p watheq-ipfs -f "%COMPOSE_FILE%" up -d --remove-orphans
+
+REM Wait for IPFS API to become responsive
+echo Waiting for IPFS API...
+set /a TRIES=0
+:wait_loop
+timeout /t 2 /nobreak >nul
+set /a TRIES+=1
+curl -s -o nul -w "%%{http_code}" -X POST http://127.0.0.1:15001/api/v0/id 2>nul | findstr /C:"200" >nul 2>&1
+if %ERRORLEVEL%==0 goto :ready
+if %TRIES% GEQ 15 (
+    echo WARNING: IPFS API did not respond in 30s. Check Docker logs:
+    echo   docker logs ipfs-node
+    goto :EOF
+)
+goto :wait_loop
+
+:ready
+echo IPFS is running and ready.
+echo   API:      http://127.0.0.1:15001
+echo   Gateway:  http://127.0.0.1:18080
+echo.

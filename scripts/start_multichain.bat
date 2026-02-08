@@ -22,8 +22,11 @@ if not exist "%COMPOSE_FILE%" (
     goto :EOF
 )
 
+REM Remove any stale container from previous runs
+docker rm -f multichain-node >nul 2>&1
+
 echo Starting MultiChain container...
-docker-compose -f "%COMPOSE_FILE%" up -d --build --remove-orphans
+docker-compose -p watheq-multichain -f "%COMPOSE_FILE%" up -d --build --remove-orphans
 
 REM Wait for RPC to become responsive
 echo Waiting for MultiChain RPC...
