@@ -49,3 +49,4 @@ echo   Chain:    watheqchain
 echo   RPC:      http://127.0.0.1:4402
 echo   Stream:   documents (auto-created)
 echo.
+timeout /t 3 /nobreak >nul

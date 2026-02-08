@@ -48,3 +48,4 @@ echo IPFS is running and ready.
 echo   API:      http://127.0.0.1:15001
 echo   Gateway:  http://127.0.0.1:18080
 echo.
+timeout /t 3 /nobreak >nul
