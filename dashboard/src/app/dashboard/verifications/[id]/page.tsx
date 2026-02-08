@@ -71,6 +71,17 @@ export default function VerificationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [noteText, setNoteText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [overwriting, setOverwriting] = useState(false);
+  const [me, setMe] = useState<{ role?: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setMe(d))
+      .catch(() => null);
+  }, []);
+
+  const isSuperAdmin = me?.role === "super_admin";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,6 +130,53 @@ export default function VerificationDetailPage() {
     }
   }
 
+  /**
+   * Overwrite the citizen record in the DB with OCR-extracted fields from this verification.
+   * Useful when the first OCR had errors (cut letters, etc.) and a newer verification has better data.
+   */
+  async function overwriteCitizenFromOCR() {
+    const nationalId = fallbackNationalId;
+    const parsed = fallbackParsedFields;
+
+    if (!nationalId) {
+      toast.error("لا يوجد رقم وطني مستخرج من هذا التحقق");
+      return;
+    }
+
+    const body: Record<string, string> = {};
+    if (parsed.full_name_ar) body.full_name_ar = parsed.full_name_ar;
+    if (parsed.full_name_en) body.full_name_en = parsed.full_name_en;
+    if (parsed.date_of_birth) body.date_of_birth = parsed.date_of_birth;
+    if (parsed.issue_date) body.issue_date = parsed.issue_date;
+    if (parsed.expiry_date) body.expiry_date = parsed.expiry_date;
+    if (parsed.address) body.address = parsed.address;
+    if (parsed.gender) body.gender = parsed.gender;
+    if (parsed.nationality) body.nationality = parsed.nationality;
+
+    if (Object.keys(body).length === 0) {
+      toast.error("لا توجد حقول مستخرجة لتحديث السجل");
+      return;
+    }
+
+    if (!confirm(`هل تريد استبدال بيانات المواطن (${nationalId}) بالبيانات المستخرجة من هذا التحقق؟`)) return;
+
+    setOverwriting(true);
+    try {
+      const res = await fetch(`/api/admin/citizens/${nationalId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "فشل التحديث");
+      toast.success("تم تحديث سجل المواطن بنجاح من بيانات هذا التحقق");
+    } catch (e: any) {
+      toast.error(e?.message || "فشل تحديث سجل المواطن");
+    } finally {
+      setOverwriting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4" dir="rtl">
@@ -139,6 +197,55 @@ export default function VerificationDetailPage() {
   const dataV = rd.DATA_VERIFICATION || {};
   const bc = rd.BLOCKCHAIN || {};
   const summary = rd.SUMMARY || {};
+
+  /* ── Fallback: extract national_id from error message or OCR when DATA_VERIFICATION failed ── */
+  const fallbackNationalId = (() => {
+    if (dataV.national_id) return dataV.national_id as string;
+    // Try error message  e.g. "...national_id 01310001042"
+    const errMsg = verification.error_message || "";
+    const errMatch = errMsg.match(/national_id\s+(\d{8,12})/);
+    if (errMatch) return errMatch[1];
+    // Try OCR text
+    const ocrText = ocr.text || "";
+    const ocrMatch = ocrText.match(/(\d{8,12})/);
+    if (ocrMatch) return ocrMatch[1];
+    return null;
+  })();
+
+  /* ── Fallback: parse OCR text for citizen fields when parsed_fields is missing ── */
+  const fallbackParsedFields = (() => {
+    if (dataV.parsed_fields && Object.keys(dataV.parsed_fields).length > 0) return dataV.parsed_fields;
+    const text = ocr.text || "";
+    if (!text) return {};
+    const fields: Record<string, string> = {};
+    const lines = text
+      .split("\n")
+      .map((l: string) => l.trim())
+      .filter(Boolean);
+
+    const idMatch = text.match(/(\d{8,12})/);
+    if (idMatch) fields.national_id = idMatch[1];
+
+    // Name: the line right after the line containing the national ID
+    if (fields.national_id) {
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(fields.national_id) && i + 1 < lines.length) {
+          const candidate = lines[i + 1];
+          const arabicChars = [...candidate].filter((c) => c >= "\u0600" && c <= "\u06FF").length;
+          if (arabicChars >= 3) fields.full_name_ar = candidate;
+          break;
+        }
+      }
+    }
+
+    const dates = text.match(/\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}/g);
+    if (dates?.[0]) fields.date_of_birth = dates[0];
+    if (dates?.[1]) fields.issue_date = dates[1];
+    if (dates?.[2]) fields.expiry_date = dates[2];
+    return fields;
+  })();
+
+  const dataVFailed = verification.current_stage === "DATA_VERIFICATION" && verification.status === "FAILED";
 
   return (
     <div className="max-w-4xl space-y-6" dir="rtl">
@@ -299,6 +406,78 @@ export default function VerificationDetailPage() {
                   {val?.db && <span className="text-xs text-slate-400">(سجل: {val.db})</span>}
                 </div>
               ))}
+
+            {/* Overwrite citizen record from this verification — super_admin only */}
+            {fallbackNationalId && isSuperAdmin && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded border border-amber-200 bg-amber-50 p-3">
+                <div className="flex-1 text-sm text-amber-800">
+                  <strong>تحديث السجل:</strong> إذا كانت البيانات المستخرجة هنا أدق من السجل المحفوظ، يمكنك استبدال
+                  بيانات المواطن ({fallbackNationalId}) بهذه البيانات.
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                  disabled={overwriting}
+                  onClick={overwriteCitizenFromOCR}
+                >
+                  {overwriting ? "جاري التحديث..." : "استبدال بيانات السجل"}
+                </Button>
+                <Link href="/dashboard/citizens">
+                  <Button size="sm" variant="ghost" className="text-amber-700">
+                    عرض سجلات المواطنين
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Overwrite fallback — shown when DATA_VERIFICATION failed and dataV is empty */}
+      {dataVFailed && Object.keys(dataV).length === 0 && fallbackNationalId && isSuperAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>مطابقة البيانات — فشلت</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="rounded border border-red-300 bg-red-50 p-2 font-semibold text-red-700">
+              🚨 محاولة احتيال — بيانات الوثيقة لا تطابق السجل المحفوظ
+            </div>
+            <div className="text-slate-600">
+              الرقم الوطني المستخرج: <span className="font-mono font-semibold">{fallbackNationalId}</span>
+            </div>
+            {Object.keys(fallbackParsedFields).length > 0 && (
+              <div className="space-y-1">
+                <div className="font-medium">الحقول المستخرجة من OCR:</div>
+                {Object.entries(fallbackParsedFields).map(([key, val]) => (
+                  <div key={key} className="flex gap-2">
+                    <span className="font-medium">{key}:</span>
+                    <span>{val as string}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded border border-amber-200 bg-amber-50 p-3">
+              <div className="flex-1 text-sm text-amber-800">
+                <strong>تحديث السجل:</strong> إذا كانت البيانات المستخرجة من OCR أدق، يمكنك استبدال بيانات المواطن (
+                {fallbackNationalId}) بهذه البيانات.
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                disabled={overwriting}
+                onClick={overwriteCitizenFromOCR}
+              >
+                {overwriting ? "جاري التحديث..." : "استبدال بيانات السجل"}
+              </Button>
+              <Link href="/dashboard/citizens">
+                <Button size="sm" variant="ghost" className="text-amber-700">
+                  عرض سجلات المواطنين
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       )}

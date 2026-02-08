@@ -32,6 +32,7 @@ export default function DashboardSidebar() {
       { href: "/dashboard/verifications", label: "التحققات" },
       { href: "/dashboard/users", label: "المستخدمون" },
       { href: "/dashboard/document-types", label: "أنواع الوثائق" },
+      { href: "/dashboard/citizens", label: "سجلات المواطنين" },
       { href: "/dashboard/reports", label: "التقارير" },
       { href: "/dashboard/audit-logs", label: "سجل العمليات" },
       { href: "/dashboard/blockchain", label: "البلوكتشين" },
