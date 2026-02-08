@@ -2,7 +2,7 @@
   "doc_type": "identity",
   "version": "3.0",
   "model": "ElementClassifier (EfficientNet-B0 binary)",
-  "trained_at": "2026-02-08T16:43:23.602757",
+  "trained_at": "2026-02-08T18:53:03.646123",
   "layout": {
     "logo_main": {
       "roi": {

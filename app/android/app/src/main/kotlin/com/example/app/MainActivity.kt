@@ -1,4 +1,4 @@
-package com.example.app
+package com.scriptye.watheeq
 
 import io.flutter.embedding.android.FlutterActivity
 
