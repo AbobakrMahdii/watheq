@@ -30,7 +30,7 @@ opencv-python>=4.5.0             # imported as cv2
 Pillow>=9.0.0
 
 # ── Biometric (Face Matching) ──────────────────────────────────────────────
-deepface>=0.0.79
+deepface>=0.0.96
 tf-keras                         # required by deepface
 
 # ── OCR ─────────────────────────────────────────────────────────────────────

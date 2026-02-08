@@ -15,7 +15,9 @@ from fastapi import (
     Query,
 )
 import cv2
+import io
 import numpy as np
+from PIL import Image, ImageOps
 
 from api.database import get_verifications_collection, get_verification_steps_collection
 from api.models import (
@@ -33,10 +35,30 @@ from api.services.verification_orchestrator import (
 router = APIRouter(prefix="/api/v1/verifications", tags=["Verifications"])
 
 
+def _normalize_exif_orientation(raw_bytes: bytes) -> bytes:
+    """Apply EXIF rotation to raw JPEG bytes and return re-encoded bytes.
+
+    Phone cameras often store the image in landscape pixel orientation
+    with an EXIF tag indicating the display rotation.  OpenCV's
+    ``cv2.imdecode`` ignores EXIF, so the image appears rotated/flipped.
+    This function bakes the rotation into the actual pixels.
+    """
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        img = ImageOps.exif_transpose(img)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=95)
+        return buf.getvalue()
+    except Exception:
+        return raw_bytes
+
+
 def _save_upload(upload: UploadFile, folder: Path, filename: str) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
+    raw = upload.file.read()
+    normalized = _normalize_exif_orientation(raw)
     dest = folder / filename
-    dest.write_bytes(upload.file.read())
+    dest.write_bytes(normalized)
     return dest
 
 
@@ -80,14 +102,15 @@ async def start_verification(
     debug_dir = storage_dir / "debug"
     debug_dir.mkdir(parents=True, exist_ok=True)
 
-    front_bytes = document_image_front.file.read()
+    front_bytes_raw = document_image_front.file.read()
+    front_bytes = _normalize_exif_orientation(front_bytes_raw)
     front_path = storage_dir / "document_front.jpg"
     front_path.write_bytes(front_bytes)
     image = cv2.imdecode(np.frombuffer(front_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise HTTPException(status_code=400, detail="Invalid document image")
     print(f"[SERVER] received shape: {image.shape[1]}x{image.shape[0]}")
-    print(f"[SERVER] received bytes: {len(front_bytes)}")
+    print(f"[SERVER] received bytes (raw={len(front_bytes_raw)}, normalized={len(front_bytes)})")
     cv2.imwrite(str(debug_dir / "input.jpg"), image)
     cv2.imwrite(str(debug_dir / "server_received.jpg"), image)
     person_path = _save_upload(person_image, storage_dir, "person_image.jpg")

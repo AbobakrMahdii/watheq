@@ -2,13 +2,14 @@ import numpy as np
 import cv2
 from typing import Dict
 
+
 class FaceService:
     def __init__(
         self,
         model_name: str = "Facenet",
         distance_metric: str = "cosine",
         accept_threshold_percent: float = 80.0,  # ✅ نسبة القبول
-        id_score_threshold: float = 0.11,        # ✅ عتبة تصنيف البطاقة
+        id_score_threshold: float = 0.11,  # ✅ عتبة تصنيف البطاقة
     ):
         self.model_name = model_name
         self.distance_metric = distance_metric
@@ -32,8 +33,7 @@ class FaceService:
         edge_density = float(np.mean(edges > 0))
 
         th = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-            cv2.THRESH_BINARY_INV, 21, 10
+            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 10
         )
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 3))
         morph = cv2.morphologyEx(th, cv2.MORPH_CLOSE, kernel, iterations=1)
@@ -45,8 +45,14 @@ class FaceService:
     def _is_id_card(self, img) -> bool:
         return self._id_likeness_score(img) >= self.id_score_threshold
 
-    # -------- Face extraction (ID only) ----
+    # -------- Face extraction (standalone use) ----
     def _extract_face(self, img):
+        """Extract and return a face crop as uint8 [0,255] BGR image.
+
+        NOTE: DeepFace.extract_faces returns float [0,1] normalised pixels.
+        We convert back to uint8 so the result is safe to pass into any
+        downstream function that expects a standard OpenCV image.
+        """
         from deepface import DeepFace
 
         faces = DeepFace.extract_faces(
@@ -58,7 +64,8 @@ class FaceService:
         if not faces:
             raise RuntimeError("No face detected in ID image")
 
-        face = faces[0]["face"]
+        face = faces[0]["face"]  # float [0,1]
+        face = (face * 255).astype(np.uint8)  # → uint8 [0,255]
         face = cv2.resize(face, (224, 224))
         return face
 
@@ -97,13 +104,17 @@ class FaceService:
 
         from deepface import DeepFace
 
-        id_face = self._extract_face(img_id)
-
+        # Let DeepFace handle face detection + alignment + embedding for
+        # BOTH images internally with RetinaFace.  This avoids the old bug
+        # where _extract_face returned float [0,1] pixels that DeepFace.verify
+        # then mis-preprocessed (expecting uint8 [0,255]), producing garbage
+        # embeddings and <10% similarity scores.
         result = DeepFace.verify(
-            id_face,
+            img_id,
             img_live,
             model_name=self.model_name,
             distance_metric=self.distance_metric,
+            detector_backend="retinaface",
             enforce_detection=False,
         )
 
@@ -118,6 +129,7 @@ class FaceService:
             "accepted": accepted,
             "accept_threshold_percent": self.accept_threshold_percent,
             "debug": {
-                "id_likeness_score": round(id_score, 4),"live_likeness_score": round(live_score, 4),
-            }
+                "id_likeness_score": round(id_score, 4),
+                "live_likeness_score": round(live_score, 4),
+            },
         }

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 import cv2
 import numpy as np
@@ -62,6 +63,8 @@ from api.services.verification_steps_service import (
     document_face_extraction,
     face_matching,
 )
+
+logger = logging.getLogger("watheq.orchestrator")
 
 
 @dataclass
@@ -298,13 +301,38 @@ class VerificationOrchestrator:
                         doc_face_path,
                     )
                 elif stage == VerificationStage.FACE_MATCHING:
-                    if doc_face_path is None:
-                        raise RuntimeError("Document face not available")
+                    if rectified_path is None:
+                        raise RuntimeError("Rectified document not available")
+                    # Prefer the extracted document face for comparison when
+                    # available.  The full rectified document is the fallback
+                    # so that FaceService._id_likeness_score can still
+                    # classify it as an ID card if needed.
+                    face_src = (
+                        doc_face_path
+                        if doc_face_path is not None and doc_face_path.exists()
+                        else rectified_path
+                    )
+                    logger.info(
+                        "[ORCH:FACE_MATCHING] doc_face_path=%s  exists=%s",
+                        doc_face_path,
+                        doc_face_path.exists() if doc_face_path else False,
+                    )
+                    logger.info(
+                        "[ORCH:FACE_MATCHING] rectified_path=%s", rectified_path
+                    )
+                    logger.info("[ORCH:FACE_MATCHING] → face_src chosen: %s", face_src)
+                    logger.info(
+                        "[ORCH:FACE_MATCHING] person_image=%s  exists=%s",
+                        payload.person_image_path,
+                        payload.person_image_path.exists(),
+                    )
                     result = await asyncio.to_thread(
                         face_matching,
-                        doc_face_path,
+                        face_src,
                         payload.person_image_path,
+                        rectified_path,
                     )
+                    logger.info("[ORCH:FACE_MATCHING] result=%s", result)
                     if not result.get("accepted", False):
                         pct = result.get("similarity_percent", 0)
                         failure_reason_code = "FACE_MISMATCH"
