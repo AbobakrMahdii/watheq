@@ -19,8 +19,12 @@ databases>=0.9.0
 aiomysql>=0.2.0
 
 # ── AI / Deep Learning (v3 — ElementClassifier + FontAnalyzer) ─────────────
-torch>=2.0.0
-torchvision>=0.15.0              # EfficientNet-B0 backbone for ElementClassifier
+# NOTE: torch and torchvision are NOT installed via this file.
+# They require a special install command for GPU (CUDA) support.
+# Run:  scripts\setup_python.bat   (auto-detects GPU vs CPU)
+# Or manually:
+#   GPU:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   CPU:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 numpy>=1.24.0
 opencv-python>=4.5.0             # imported as cv2
 Pillow>=9.0.0
@@ -54,7 +58,7 @@ pandas>=2.0.0
 tqdm>=4.64.0
 
 # NOTE: System-level dependencies not covered by pip:
-#   - CUDA toolkit (for GPU-accelerated torch)
+#   - NVIDIA GPU driver (for CUDA-accelerated torch — optional)
 #   - Google Cloud credentials JSON (for Vision OCR)
 #   - MultiChain daemon (multichaind) running locally
 #   - IPFS daemon (kubo) running locally
@@ -62,3 +66,6 @@ tqdm>=4.64.0
 # NOTE: ultralytics (YOLOv8) was removed in AI v3.
 #   Element detection now uses layout_config.yaml ROIs.
 #   Verification uses trained ElementClassifier + FontAnalyzer.
+#
+# SETUP: Run scripts\setup_python.bat to install ALL dependencies
+#   including PyTorch with automatic GPU/CPU detection.

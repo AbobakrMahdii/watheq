@@ -114,9 +114,12 @@ class ElementClassifier:
             logger.error(f"PyTorch/torchvision not available: {e}")
 
     @classmethod
-    def load(cls, weight_path: str | Path, device: str = "cpu") -> "ElementClassifier":
+    def load(cls, weight_path: str | Path, device: str = "auto") -> "ElementClassifier":
         """Load a trained classifier from a .pt file."""
         import torch
+
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
 
         obj = cls(device=device)
         obj._build_model()

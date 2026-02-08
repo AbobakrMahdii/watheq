@@ -124,8 +124,9 @@ tensorflow==2.20.0
 termcolor==3.3.0
 threadpoolctl==3.6.0
 tifffile==2025.12.20
-torch==2.9.1
-torchvision==0.24.1
+# torch and torchvision — installed separately via scripts\setup_python.bat
+# Do NOT add torch/torchvision here — PyPI only has CPU builds.
+# GPU builds require: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 tqdm==4.67.1
 typing_extensions==4.15.0
 typing-inspection==0.4.2

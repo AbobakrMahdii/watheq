@@ -58,13 +58,21 @@ def _detect_device() -> str:
     """Auto-detect CUDA GPU if available."""
     try:
         import torch
+
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
-            logger.info(f"GPU detected: {gpu_name} — using CUDA")
+            vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            logger.info(
+                f"\u2713 GPU detected: {gpu_name} ({vram:.1f} GB VRAM) \u2014 using CUDA"
+            )
             return "cuda"
+        else:
+            logger.info("PyTorch installed but CUDA not available \u2014 using CPU")
+            logger.info(
+                "  Tip: reinstall with GPU support:  scripts\\setup_python.bat --gpu"
+            )
     except ImportError:
-        pass
-    logger.info("No CUDA GPU detected — using CPU (training will be slow)")
+        logger.error("PyTorch is not installed! Run: scripts\\setup_python.bat")
     return "cpu"
 
 
@@ -240,7 +248,9 @@ def train_element_classifier(
     training_params = layout_config.get("training", {})
 
     device = _detect_device()
-    logger.info(f"  Training classifier for {class_name} (from {ref_stem}) on {device.upper()}...")
+    logger.info(
+        f"  Training classifier for {class_name} (from {ref_stem}) on {device.upper()}..."
+    )
 
     classifier = ElementClassifier(device=device)
     result = classifier.train_from_dirs(

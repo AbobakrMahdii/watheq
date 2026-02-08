@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { getBackendBaseUrl, getBearerTokenFromCookies } from "@/lib/backend";
 
 export async function POST(req: Request) {

@@ -7,14 +7,21 @@ echo.
 
 cd /d "%~dp0.."
 
-REM Check AI models — train any untrained document types (v3 pipeline)
+REM Check if PyTorch is installed (required for AI training)
 echo [0/5] Checking AI models (v3 — ElementClassifier + FontAnalyzer)...
+python -c "import torch" >nul 2>&1
+if errorlevel 1 (
+    echo      WARNING: PyTorch not installed. AI training skipped.
+    echo      Run:  scripts\setup_python.bat  to install all dependencies.
+    goto :skip_ai
+)
 python ai\train_ai.py --all
 if errorlevel 0 (
     echo      AI models ready.
 ) else (
     echo      Warning: AI training check failed. Continuing anyway...
 )
+:skip_ai
 echo.
 
 REM Start IPFS in a new window (Docker)
