@@ -259,7 +259,16 @@ def document_face_extraction(cropped_path: Path, output_path: Path) -> dict[str,
 
 
 def face_matching(document_face_path: Path, person_image: Path) -> dict[str, Any]:
+    if not document_face_path.exists():
+        raise RuntimeError(
+            "Document face image not found — face extraction may have failed"
+        )
+    if not person_image.exists():
+        raise RuntimeError("Person/selfie image not found")
+
     service = FaceService()
+    # Both images go through RetinaFace detection + alignment inside compare_faces,
+    # ensuring consistent face embeddings regardless of crop quality.
     result = service.verify_id_vs_live(
         document_face_path.read_bytes(), person_image.read_bytes()
     )
@@ -427,6 +436,7 @@ def _parse_ocr_fields(ocr_result: dict[str, Any]) -> dict[str, str]:
     text = ocr_result.get("text", "") or ""
 
     # Try to extract national ID (Yemeni format: digits, typically 8-12)
+
     id_match = re.search(r"\b(\d{8,12})\b", text)
     if id_match:
         fields["national_id"] = id_match.group(1)
@@ -448,41 +458,70 @@ def _parse_ocr_fields(ocr_result: dict[str, Any]) -> dict[str, str]:
     return fields
 
 
+def _build_citizen_insert_data(fields: dict[str, str]) -> dict[str, Any]:
+    """Build a complete citizen record dict from parsed OCR fields, defaulting missing fields to None."""
+    all_columns = [
+        "national_id",
+        "full_name_ar",
+        "full_name_en",
+        "date_of_birth",
+        "address",
+        "issue_date",
+        "expiry_date",
+        "gender",
+        "nationality",
+        "document_type",
+    ]
+    return {col: fields.get(col) for col in all_columns}
+
+
 async def data_verification(
     *,
     ocr_result: dict[str, Any],
     document_type_id: int,
 ) -> dict[str, Any]:
-    """التحقق من البيانات — مقارنة حقول OCR مع سجلات المواطنين في قاعدة البيانات."""
+    """التحقق من البيانات — مقارنة حقول OCR مع سجلات المواطنين في قاعدة البيانات.
+
+    Logic:
+      - If national_id cannot be extracted from OCR → raise (pipeline fails).
+      - If citizen NOT found → store extracted data as new record, pass.
+      - If citizen found and fields match → pass.
+      - If citizen found but fields mismatch → raise as fraud (محاولة احتيال).
+    """
     from api.database import get_citizen_records_collection
 
     fields = _parse_ocr_fields(ocr_result)
     national_id = fields.get("national_id")
 
     if not national_id:
-        return {
-            "citizen_found": False,
-            "parsed_fields": fields,
-            "match_details": {},
-            "message": "لم يتم استخراج رقم الهوية من نص OCR",
-        }
+        raise RuntimeError(
+            "National_id not extracted from OCR — cannot verify citizen data"
+        )
 
     citizens_col = get_citizen_records_collection()
     citizen = await citizens_col.get_by_national_id(national_id)
 
+    # ── Case C: citizen does not exist → store new record, PASS ──
     if citizen is None:
+        insert_data = _build_citizen_insert_data(fields)
+        await citizens_col.create(insert_data)
         return {
             "citizen_found": False,
+            "new_record_created": True,
+            "data_match": True,
+            "fraud_suspected": False,
+            "national_id": national_id,
             "parsed_fields": fields,
             "match_details": {},
-            "message": f"لا يوجد سجل مواطن لرقم الهوية {national_id}",
+            "match_count": 0,
+            "total_compared": 0,
+            "message": "سجل مواطن جديد — تم حفظ البيانات المستخرجة لأول مرة",
         }
 
-    # Compare extracted fields with DB record
+    # ── Citizen exists → compare fields ──
     match_details: dict[str, Any] = {}
 
     if "full_name_ar" in fields and citizen.get("full_name_ar"):
-        # Simple contains / similarity check
         ocr_name = fields["full_name_ar"].replace(" ", "")
         db_name = citizen["full_name_ar"].replace(" ", "")
         name_match = ocr_name in db_name or db_name in ocr_name
@@ -505,15 +544,27 @@ async def data_verification(
 
     match_count = sum(1 for v in match_details.values() if v.get("match"))
     total_compared = len(match_details)
+    all_matched = total_compared > 0 and match_count == total_compared
 
+    # ── Case B: citizen exists but data mismatches → FRAUD ──
+    if total_compared > 0 and not all_matched:
+        raise RuntimeError(
+            f"Fraud suspected — data mismatch: "
+            f"{match_count}/{total_compared} fields matched for national_id {national_id}"
+        )
+
+    # ── Case A: citizen exists and data matches → PASS ──
     return {
         "citizen_found": True,
+        "new_record_created": False,
+        "data_match": True,
+        "fraud_suspected": False,
         "national_id": national_id,
         "parsed_fields": fields,
         "match_details": match_details,
         "match_count": match_count,
         "total_compared": total_compared,
-        "message": f"تم مطابقة {match_count}/{total_compared} حقول مع سجل المواطن",
+        "message": f"تم مطابقة {match_count}/{total_compared} حقول مع سجل المواطن بنجاح",
     }
 
 

@@ -958,7 +958,21 @@ class CitizenRecordsCollection:
         return dict(row) if row else None
 
     async def create(self, data: Dict[str, Any]) -> int:
+        """Insert a new citizen record. Missing fields default to None."""
         await self._ensure_connected()
+        all_columns = [
+            "national_id",
+            "full_name_ar",
+            "full_name_en",
+            "date_of_birth",
+            "address",
+            "issue_date",
+            "expiry_date",
+            "gender",
+            "nationality",
+            "document_type",
+        ]
+        safe_data = {col: data.get(col) for col in all_columns}
         q = """
             INSERT INTO citizen_records (
                 national_id, full_name_ar, full_name_en, date_of_birth,
@@ -970,7 +984,7 @@ class CitizenRecordsCollection:
                 :nationality, :document_type
             )
         """
-        return await self.db.execute(q, values=data)
+        return await self.db.execute(q, values=safe_data)
 
     async def update(self, national_id: str, data: Dict[str, Any]) -> int:
         await self._ensure_connected()
