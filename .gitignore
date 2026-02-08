@@ -2,3 +2,9 @@
 .env
 api/.env
 ai/data/training
+ai/models
+storage/*
+*.pyc
+__pycache__/
+*.log
+*.err

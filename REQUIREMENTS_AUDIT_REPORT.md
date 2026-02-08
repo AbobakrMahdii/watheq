@@ -132,20 +132,20 @@
 
 ### 3.3 المعالجة والتحليل الآلي (Automated Processing)
 
-| #     | Requirement                                       | Status | Evidence                                                                                                                                                                                                               |
-| ----- | ------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.3.1 | يحدد نوع الوثيقة تلقائياً أو يسمح بالتحديد اليدوي | ⚠️     | Manual selection ✅ (`document_type_id` sent by user). **Automatic type detection ❌** — no ML classifier for document-type recognition exists.                                                                        |
-| 3.3.2 | يطبّق خط معالجة مناسب بناءً على نوع الوثيقة       | ✅     | `verification_orchestrator.py` runs a 9-stage sequential pipeline. `document_type` record is fetched and its `folder_name` used in `ai/verify_document.py` to load type-specific reference images and ROI definitions. |
-| 3.3.3 | يخزّن نتائج المعالجة لكل مرحلة                    | ✅     | `verification_steps` table stores per-stage records: stage name, status (pending/processing/passed/failed/skipped), result JSON, details, started_at, completed_at.                                                    |
+| #     | Requirement                                       | Status | Evidence                                                                                                                                                                                                                                                                                                                                                                    |
+| ----- | ------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.3.1 | يحدد نوع الوثيقة تلقائياً أو يسمح بالتحديد اليدوي | ⚠️     | Manual selection ✅ (`document_type_id` sent by user). **Automatic type detection ❌** — no ML classifier for document-type recognition exists.                                                                                                                                                                                                                             |
+| 3.3.2 | يطبّق خط معالجة مناسب بناءً على نوع الوثيقة       | ✅     | `verification_orchestrator.py` runs an **8-stage** sequential pipeline: DOCUMENT_IMAGE_QUALITY → DOCUMENT_CROPPING → DOCUMENT_FACE_EXTRACTION → FACE_MATCHING → OCR → AI_VERIFICATION → DATA_VERIFICATION → BLOCKCHAIN. `document_type` record is fetched and its `folder_name` used in `ai/verify_document.py` to load type-specific reference images and ROI definitions. |
+| 3.3.3 | يخزّن نتائج المعالجة لكل مرحلة                    | ✅     | `verification_steps` table stores per-stage records: stage name, status (pending/processing/passed/failed/skipped), result JSON, details, started_at, completed_at.                                                                                                                                                                                                         |
 
 ### 3.4 التخزين والأرشفة (Storage & Archiving)
 
-| #     | Requirement                              | Status | Evidence                                                                                                                                                                                                                                                            |
-| ----- | ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.4.1 | يحفظ نسخة من الوثيقة الأصلية             | ⚠️     | Uploaded files are saved to disk at `uploads/verifications/{verification_id}/`. **However**, no long-term archival strategy, no S3/cloud storage, no retention policy. Files persist only on local filesystem.                                                      |
-| 3.4.2 | يخزّن بصمة الوثيقة (Hash) في البلوكتشين  | ✅     | `hash_service.py` → `sha256_bytes()` computes document hash. `blockchain_verify()` in verification_steps_service.py uploads to IPFS, records CID + hash on MultiChain AND Hyperledger Fabric. `document_hashes` DB table stores hash + IPFS CID + blockchain TX ID. |
-| 3.4.3 | يمنع حذف الوثائق المسجّلة على البلوكتشين | ❌     | No delete endpoint exists (which inadvertently prevents deletion), but there is no explicit protection mechanism. No API endpoint for document deletion at all — so requirement is unintentionally met by absence, but not by design.                               |
-| 3.4.4 | يتيح البحث والتصفية على الوثائق          | ⚠️     | Admin `GET /api/v1/admin/verifications` supports `?status=` filter and `?search=` parameter. User's `GET /api/v1/verification/my` has `?status=` filter. **Missing**: no search by document type name, date range, hash, or full-text content search.               |
+| #     | Requirement                              | Status | Evidence                                                                                                                                                                                                                                                                                                                 |
+| ----- | ---------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.4.1 | يحفظ نسخة من الوثيقة الأصلية             | ⚠️     | Uploaded files are saved to disk at `uploads/verifications/{verification_id}/`. **However**, no long-term archival strategy, no S3/cloud storage, no retention policy. Files persist only on local filesystem.                                                                                                           |
+| 3.4.2 | يخزّن بصمة الوثيقة (Hash) في البلوكتشين  | ✅     | `hash_service.py` → `sha256_bytes()` computes document hash. `blockchain_verify()` in verification_steps_service.py uploads to IPFS, records CID + hash on **MultiChain** (Fabric removed in overhaul). `document_hashes` DB table stores hash + IPFS CID + blockchain TX ID + timestamp metadata.                       |
+| 3.4.3 | يمنع حذف الوثائق المسجّلة على البلوكتشين | ❌     | No delete endpoint exists (which inadvertently prevents deletion), but there is no explicit protection mechanism. No API endpoint for document deletion at all — so requirement is unintentionally met by absence, but not by design.                                                                                    |
+| 3.4.4 | يتيح البحث والتصفية على الوثائق          | ✅     | Admin `GET /api/v1/admin/verifications` supports filters: `?status=`, `?document_type_id=`, `?user_id=`, `?date_from=`, `?date_to=`, `?search=`, `?sort_by=`, `?sort_order=`, `?page=`, `?page_size=`. User's `GET /api/v1/verification/my` has `?status=` filter. Dashboard verifications page provides full filter UI. |
 
 ---
 
@@ -153,53 +153,53 @@
 
 ### 4.1 المطابقة البيومترية (Biometric Matching)
 
-| #     | Requirement                                     | Status | Evidence                                                                                                                                                                                                                                                                                  |
-| ----- | ----------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.1.1 | يقارن الصورة الشخصية الحيّة مع صورة الوثيقة     | ✅     | `face_service.py` uses **DeepFace** library with `Facenet` model and `cosine` distance metric. Threshold: 0.4. `verification_steps_service.py` → `face_matching_verify()` calls `face_service.compare_faces(selfie_path, doc_face_path)`.                                                 |
-| 4.1.2 | يستخرج صورة الوجه من الوثيقة تلقائياً           | ✅     | `verification_steps_service.py` → `document_face_extraction_verify()` uses ROI coordinates from layout definition to crop the face region from the document image. Also falls back to saving a region-based crop.                                                                         |
-| 4.1.3 | يفحص حيوية الصورة الملتقطة (Liveness Detection) | ⚠️     | **Client-side** ✅: Flutter `SelfieLivenessScreen` uses ML Kit face detection for head-turn + blink challenges. **Server-side** ⚠️: `liveness_service.py` → `simple_liveness_check()` only checks image dimensions and contrast — very basic, not a true anti-spoofing liveness detector. |
-| 4.1.4 | يسجّل نتيجة المطابقة ونسبة التطابق              | ✅     | `face_matching_verify()` stores distance and verified status in step result JSON. `biometric_router.py` stores `match_score`, `liveness_passed`, `result` in `biometric_audit_log` table.                                                                                                 |
+| #     | Requirement                                     | Status | Evidence                                                                                                                                                                                                                                  |
+| ----- | ----------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.1.1 | يقارن الصورة الشخصية الحيّة مع صورة الوثيقة     | ✅     | `face_service.py` uses **DeepFace** library with `Facenet` model and `cosine` distance metric. Threshold: 0.4. `verification_steps_service.py` → `face_matching_verify()` calls `face_service.compare_faces(selfie_path, doc_face_path)`. |
+| 4.1.2 | يستخرج صورة الوجه من الوثيقة تلقائياً           | ✅     | `verification_steps_service.py` → `document_face_extraction_verify()` uses ROI coordinates from layout definition to crop the face region from the document image. Also falls back to saving a region-based crop.                         |
+| 4.1.3 | يفحص حيوية الصورة الملتقطة (Liveness Detection) | ⚠️     | **Client-side** ✅: Flutter `SelfieLivenessScreen` uses ML Kit face detection for head-turn + blink challenges. **Server-side**: SELFIE_LIVENESS stage removed from pipeline in system overhaul. Liveness is now client-side only.        |
+| 4.1.4 | يسجّل نتيجة المطابقة ونسبة التطابق              | ✅     | `face_matching_verify()` stores distance and verified status in step result JSON. `biometric_router.py` stores `match_score`, `liveness_passed`, `result` in `biometric_audit_log` table.                                                 |
 
 ### 4.2 كشف التزوير بالذكاء الاصطناعي (AI Forgery Detection)
 
-| #     | Requirement                                | Status | Evidence                                                                                                                                                                                                                                                                     |
-| ----- | ------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.2.1 | يحلّل الوثيقة باستخدام نموذج ذكاء اصطناعي  | ⚠️     | `ai/verify_document.py` → `verify_card()` uses **SSIM** (Structural Similarity Index) to compare document regions against reference templates. This is a template-matching approach, **NOT** a trained deep learning model. No CNN/neural network for forgery detection.     |
-| 4.2.2 | يكشف علامات التلاعب أو التعديل             | ⚠️     | SSIM comparison checks overall similarity per ROI element. It can detect gross differences but **cannot** detect pixel-level tampering, copy-move forgery, splicing, or metadata manipulation. No Error Level Analysis (ELA) or noise analysis implemented.                  |
-| 4.2.3 | يقيّم مستوى ثقة النتيجة (Confidence Score) | ⚠️     | Each SSIM comparison returns a similarity score (0.0–1.0). Overall `confidence` is the average of all element scores. Threshold at 0.7 for pass. **However**, SSIM is not a calibrated confidence — it's a pixel-similarity metric, not a probabilistic confidence estimate. |
+| #     | Requirement                                | Status | Evidence                                                                                                                                                                                                                                                                                          |
+| ----- | ------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.2.1 | يحلّل الوثيقة باستخدام نموذج ذكاء اصطناعي  | ✅     | `ai/verify_document.py` → `verify_card()` uses **YOLOv8** (ultralytics) for element detection and **Siamese Network** (EfficientNet-B0 backbone, 128-dim embeddings) for per-element verification. Trained deep learning models with fallback template detection when models are not yet trained. |
+| 4.2.2 | يكشف علامات التلاعب أو التعديل             | ✅     | AI pipeline includes: position/size validation per element, color histogram analysis, ghost image consistency check, anomaly detection. Per-element results with pass/fail + confidence. Detects missing elements, anomalous positioning, and color drift.                                        |
+| 4.2.3 | يقيّم مستوى ثقة النتيجة (Confidence Score) | ✅     | Siamese network returns calibrated similarity scores (0.0–1.0) per element. Weighted aggregation produces overall confidence: element verification 50%, position checks 20%, color analysis 15%, ghost image 15%. Final decision threshold at 0.6 for pass.                                       |
 
 ### 4.3 التعرف البصري على النصوص (OCR)
 
-| #     | Requirement                      | Status | Evidence                                                                                                                                                                                                                                                 |
-| ----- | -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.3.1 | يستخرج النصوص من صور الوثائق     | ✅     | `ocr/vision_service_ocr.py` uses **Google Cloud Vision API** (`TEXT_DETECTION` for images, `DOCUMENT_TEXT_DETECTION` for PDFs). Returns full extracted text.                                                                                             |
-| 4.3.2 | يدعم اللغتين العربية والإنجليزية | ✅     | Google Vision API handles multilingual text extraction natively. No language restriction in the OCR code.                                                                                                                                                |
-| 4.3.3 | يتحقق من صحة البيانات المستخرجة  | ❌     | OCR text is returned raw without any validation. No regex patterns for ID numbers, dates, or names. No cross-referencing with expected fields. `ocr_verify()` in the pipeline only checks that text was extracted (non-empty), not that it's meaningful. |
+| #     | Requirement                      | Status | Evidence                                                                                                                                                                                                                                                                                                                     |
+| ----- | -------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.3.1 | يستخرج النصوص من صور الوثائق     | ✅     | `ocr/vision_service_ocr.py` uses **Google Cloud Vision API** (`TEXT_DETECTION` for images, `DOCUMENT_TEXT_DETECTION` for PDFs). Returns full extracted text.                                                                                                                                                                 |
+| 4.3.2 | يدعم اللغتين العربية والإنجليزية | ✅     | Google Vision API handles multilingual text extraction natively. No language restriction in the OCR code.                                                                                                                                                                                                                    |
+| 4.3.3 | يتحقق من صحة البيانات المستخرجة  | ✅     | New **DATA_VERIFICATION** pipeline stage: `data_verification()` in `verification_steps_service.py` parses OCR text with regex (national_id, name, dates), queries `citizen_records` table by national_id, compares extracted fields against registered data. Returns per-field match results with overall data_match status. |
 
 ### 4.4 التحقق عبر قواعد البيانات (Database Verification)
 
-| #     | Requirement                                      | Status | Evidence                                                                                                                                 |
-| ----- | ------------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.4.1 | يتحقق من بيانات الوثيقة مقابل قواعد بيانات رسمية | ❌     | **No integration with any external government or official database.** No API calls to NIC, MOI, or any third-party verification service. |
-| 4.4.2 | يدعم التكامل مع قواعد بيانات حكومية أو مؤسسية    | ❌     | No adapters, plugins, or configuration for external database connections. No interface defined for future integration.                   |
+| #     | Requirement                                      | Status | Evidence                                                                                                                                                                                                                         |
+| ----- | ------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.4.1 | يتحقق من بيانات الوثيقة مقابل قواعد بيانات رسمية | ⚠️     | New `citizen_records` table with seeded demo data (20 Yemeni citizen records). `data_verification()` queries by national_id extracted from OCR. **Local simulation** of government DB — not connected to real external APIs yet. |
+| 4.4.2 | يدعم التكامل مع قواعد بيانات حكومية أو مؤسسية    | ⚠️     | `CitizenRecordsCollection` provides CRUD interface ready for integration. Schema supports national_id, full_name, birth_date, expiry_date. **However**, real external API integration not yet implemented.                       |
 
 ### 4.5 بصمات الوثائق والبلوكتشين (Document Fingerprinting & Blockchain)
 
-| #     | Requirement                                   | Status | Evidence                                                                                                                                                                                                                           |
-| ----- | --------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.5.1 | يحسب بصمة رقمية (Hash) لكل وثيقة              | ✅     | `hash_service.py` → `sha256_bytes(file_bytes)` computes SHA-256 hash. Used in both blockchain and deduplication checks.                                                                                                            |
-| 4.5.2 | يسجّل البصمة والبيانات الوصفية على البلوكتشين | ✅     | `blockchain_verify()` → IPFS upload → `multichain_service.publish_to_stream()` for MultiChain + `fabric_service.fabric_invoke()` for Hyperledger Fabric. Stores hash, IPFS CID, and TX IDs.                                        |
-| 4.5.3 | يكشف تكرار الوثائق بمقارنة البصمات            | ✅     | `blockchain_router.py` → `POST /blockchain/upload` checks `document_hashes` table for existing hash before uploading. Returns existing record if duplicate found.                                                                  |
-| 4.5.4 | يوفّر إثبات عدم تلاعب بالوثيقة عبر البلوكتشين | ⚠️     | Hash is stored on blockchain which provides immutability. **However**, no explicit verification endpoint that re-hashes a document and compares against the blockchain record. The prove-no-tampering workflow is not user-facing. |
+| #     | Requirement                                   | Status | Evidence                                                                                                                                                                                                                                                                  |
+| ----- | --------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.5.1 | يحسب بصمة رقمية (Hash) لكل وثيقة              | ✅     | `hash_service.py` → `sha256_bytes(file_bytes)` computes SHA-256 hash. Used in both blockchain and deduplication checks.                                                                                                                                                   |
+| 4.5.2 | يسجّل البصمة والبيانات الوصفية على البلوكتشين | ✅     | `blockchain_verify()` → IPFS upload → `multichain_service.publish_to_stream()` on MultiChain (Fabric removed). Stores hash, IPFS CID, TX ID, and timestamp metadata.                                                                                                      |
+| 4.5.3 | يكشف تكرار الوثائق بمقارنة البصمات            | ✅     | `blockchain_router.py` → `POST /blockchain/upload` checks `document_hashes` table for existing hash before uploading. Returns existing record if duplicate found.                                                                                                         |
+| 4.5.4 | يوفّر إثبات عدم تلاعب بالوثيقة عبر البلوكتشين | ✅     | New `GET /api/v1/blockchain/verify/{file_hash}` endpoint: accepts SHA-256 hash, looks up `document_hashes` table, fetches chain data via MultiChain `get_item_by_key`, returns verified status + chain data + timestamp. User-facing verification workflow now available. |
 
 ### 4.6 اتخاذ القرار النهائي (Decision Fusion)
 
-| #     | Requirement                                    | Status | Evidence                                                                                                                                                                                                                                         |
-| ----- | ---------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 4.6.1 | يدمج نتائج جميع مراحل التحقق                   | ⚠️     | `verification_orchestrator.py` runs all 9 stages sequentially. Final status is set to `verified` only if all stages pass, or `rejected` if any fail. **However**, this is a simple all-or-nothing boolean AND — not a weighted fusion algorithm. |
-| 4.6.2 | يحدد قرار نهائي (مقبول / مرفوض / يحتاج مراجعة) | ⚠️     | `VerificationStatus` enum has: `pending`, `processing`, `verified`, `rejected`. **Missing**: `needs_review` / `manual_review` status. No partial acceptance or human-review escalation path.                                                     |
-| 4.6.3 | يتيح للمشرف مراجعة القرارات يدوياً             | ❌     | Admin can VIEW verifications via dashboard (`admin/verifications/page.tsx`), but **cannot override, approve, reject, or add notes**. No manual decision endpoint exists.                                                                         |
-| 4.6.4 | يرسل إشعاراً بالنتيجة للمستخدم                 | ❌     | No push notification, email, SMS, or in-app notification system. User must manually check verification history or watch the realtime polling in `VerificationResultScreen`.                                                                      |
+| #     | Requirement                                    | Status | Evidence                                                                                                                                                                                                                                                                                                            |
+| ----- | ---------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.6.1 | يدمج نتائج جميع مراحل التحقق                   | ✅     | `verification_orchestrator.py` runs all **8 stages** sequentially. Final status is set to `verified` only if all stages pass, or `rejected` if any fail. AI stage uses weighted fusion (element verification 50%, position 20%, color 15%, ghost 15%). Data verification cross-references OCR with citizen records. |
+| 4.6.2 | يحدد قرار نهائي (مقبول / مرفوض / يحتاج مراجعة) | ⚠️     | `VerificationStatus` enum has: `pending`, `processing`, `verified`, `rejected`. **Missing**: `needs_review` / `manual_review` status. No partial acceptance or human-review escalation path.                                                                                                                        |
+| 4.6.3 | يتيح للمشرف مراجعة القرارات يدوياً             | ⚠️     | Admin can VIEW verifications and **add notes** via `POST /api/v1/admin/verifications/{id}/notes`. Dashboard detail page shows steps, AI results, data verification, and notes with add form. **However**, cannot override/approve/reject verification decision.                                                     |
+| 4.6.4 | يرسل إشعاراً بالنتيجة للمستخدم                 | ❌     | No push notification, email, SMS, or in-app notification system. User must manually check verification history or watch the realtime polling in `VerificationResultScreen`.                                                                                                                                         |
 
 ---
 
@@ -224,19 +224,19 @@
 
 ### 5.3 لوحة الإحصائيات (Analytics Dashboard)
 
-| #     | Requirement                                               | Status | Evidence                                                                                                                                                                                                                                                                     |
-| ----- | --------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 5.3.1 | يعرض إحصائيات عامة (عدد المستخدمين، التحققات، نسب النجاح) | ⚠️     | `admin_router.py` → `GET /api/v1/admin/analytics` returns: total_users, total_verifications, verified_count, rejected_count, pending_count, success_rate. Dashboard `dashboard/page.tsx` shows these as cards. **Missing**: no charts, no trend graphs, no time-series data. |
-| 5.3.2 | يتيح عرض إحصائيات بناءً على فترات زمنية                   | ❌     | No date-range parameter on analytics endpoint. No daily/weekly/monthly breakdown. No time-series API.                                                                                                                                                                        |
-| 5.3.3 | يتيح تصدير التقارير الإحصائية                             | ❌     | Only audit logs have export. Analytics/statistics have no export functionality (no PDF/Excel/CSV export for analytics data).                                                                                                                                                 |
+| #     | Requirement                                               | Status | Evidence                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----- | --------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5.3.1 | يعرض إحصائيات عامة (عدد المستخدمين، التحققات، نسب النجاح) | ✅     | `admin_router.py` → `GET /api/v1/admin/analytics` returns: total_users, total_verifications, verified_count, rejected_count, pending_count, success_rate, **status_breakdown**, **by_document_type**, **time_series** (daily for 30 days), **failure_reasons** (top 10), **avg_processing_time_sec**. Dashboard shows summary cards + **recharts** pie/bar/line charts with Arabic labels. |
+| 5.3.2 | يتيح عرض إحصائيات بناءً على فترات زمنية                   | ✅     | Analytics endpoint accepts `?date_from=` and `?date_to=` parameters. Dashboard reports page provides date-range picker. Time-series data returned as daily breakdown for the queried period.                                                                                                                                                                                               |
+| 5.3.3 | يتيح تصدير التقارير الإحصائية                             | ❌     | Audit logs have PDF/Excel export. **Analytics/statistics** export not yet implemented (no CSV/PDF button on analytics page).                                                                                                                                                                                                                                                               |
 
 ### 5.4 تقارير متقدمة (Advanced Reports)
 
-| #     | Requirement                                   | Status | Evidence                                                                                                                                          |
-| ----- | --------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 5.4.1 | يوفّر تقارير عن أنواع الوثائق الأكثر تحققاً   | ❌     | No per-document-type analytics. No aggregation by document type at all.                                                                           |
-| 5.4.2 | يوفّر تقارير عن أنماط محاولات التزوير         | ❌     | No fraud pattern analysis. No aggregation of failed verifications by failure reason or stage.                                                     |
-| 5.4.3 | يوفّر تقارير عن أداء النظام ومعدلات الاستجابة | ❌     | No performance metrics collection. No response-time tracking. No system health reports. Audit logs record timestamps but no duration calculation. |
+| #     | Requirement                                   | Status | Evidence                                                                                                                                                                                                         |
+| ----- | --------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5.4.1 | يوفّر تقارير عن أنواع الوثائق الأكثر تحققاً   | ✅     | Analytics returns `by_document_type` breakdown. Dashboard and reports pages show document type bar chart with counts per type.                                                                                   |
+| 5.4.2 | يوفّر تقارير عن أنماط محاولات التزوير         | ✅     | Analytics returns `failure_reasons` (top 10 from JSON_EXTRACT on verification step results). Dashboard shows failure reasons horizontal bar chart. Reports page includes failure analysis.                       |
+| 5.4.3 | يوفّر تقارير عن أداء النظام ومعدلات الاستجابة | ⚠️     | Analytics returns `avg_processing_time_sec` (calculated from verification timestamps). Reports page shows average processing time. **However**, no per-endpoint response-time tracking or system health metrics. |
 
 ---
 
@@ -268,15 +268,15 @@
 | ------- | ------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | NFR-1.1 | زمن استجابة API ≤ 2 ثانية للعمليات البسيطة | ⚠️     | No performance benchmarking done. Simple endpoints (auth, list) are likely fast. Verification pipeline involves multiple AI/OCR/blockchain calls and will exceed 2s. No caching layer (Redis/Memcached).    |
 | NFR-1.2 | يدعم 100 مستخدم متزامن كحد أدنى            | ⚠️     | FastAPI with async/await + aiomysql is architecturally capable. **However**, no load testing evidence, no connection pooling configuration tuned, no rate limiting. Uvicorn default workers may bottleneck. |
-| NFR-1.3 | يعالج 1000 عملية تحقق يومياً               | ⚠️     | DB and API can handle volume. Blockchain (MultiChain CLI + Fabric WSL bash calls) is the bottleneck — synchronous subprocess calls will serialize. No queue system (Celery/RQ) for background processing.   |
+| NFR-1.3 | يعالج 1000 عملية تحقق يومياً               | ⚠️     | DB and API can handle volume. Blockchain simplified to MultiChain only (Fabric removed). Still uses synchronous subprocess calls. No queue system (Celery/RQ) for background processing.                    |
 
 ## NFR-2. سهولة الاستخدام (Usability)
 
-| #       | Requirement                      | Status | Evidence                                                                                                                                                                                                                                                                               |
-| ------- | -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NFR-2.1 | واجهة مستخدم بديهية وسهلة التنقل | ⚠️     | Flutter app has clean bottom navigation (Home + Profile). Dashboard has sidebar navigation. **However**, limited UI polish — basic Material design. No onboarding flow, no tooltips, no help system.                                                                                   |
-| NFR-2.2 | دعم اللغة العربية (RTL)          | ⚠️     | Flutter `main.dart` has `locale: const Locale('ar')` and `supportedLocales: [Locale('ar')]`. Some Arabic text exists in UI. **However**, full RTL layout not systematically applied — many hardcoded English strings mixed in. Dashboard is **English only** — no Arabic localization. |
-| NFR-2.3 | إرسال رسائل خطأ واضحة ومفهومة    | ⚠️     | Backend returns error messages in `detail` field. Some are descriptive ("اسم المستخدم أو البريد الإلكتروني مسجل بالفعل"). Many are generic in English. Dashboard uses `Sonner` toast for error display. Flutter shows `SnackBar` or `AlertDialog`. Inconsistent language.              |
+| #       | Requirement                      | Status | Evidence                                                                                                                                                                                                                                                                                                                                        |
+| ------- | -------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-2.1 | واجهة مستخدم بديهية وسهلة التنقل | ⚠️     | Flutter app has clean bottom navigation (Home + Profile). Dashboard has sidebar navigation. **However**, limited UI polish — basic Material design. No onboarding flow, no tooltips, no help system.                                                                                                                                            |
+| NFR-2.2 | دعم اللغة العربية (RTL)          | ⚠️     | Flutter `main.dart` has `locale: const Locale('ar')` and `supportedLocales: [Locale('ar')]`. Some Arabic text exists in UI. Dashboard sidebar and pages now use **Arabic labels** (نظرة عامة, التحققات, المستخدمون, التقارير, etc.). **However**, full RTL layout not systematically applied — some deep components still have English strings. |
+| NFR-2.3 | إرسال رسائل خطأ واضحة ومفهومة    | ⚠️     | Backend returns error messages in `detail` field. Some are descriptive ("اسم المستخدم أو البريد الإلكتروني مسجل بالفعل"). Many are generic in English. Dashboard uses `Sonner` toast for error display. Flutter shows `SnackBar` or `AlertDialog`. Inconsistent language.                                                                       |
 
 ## NFR-3. الموثوقية (Reliability)
 
@@ -292,7 +292,7 @@
 | ------- | --------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | NFR-4.1 | بنية معمارية قابلة للتوسع الأفقي              | ⚠️     | Microservice-ish architecture (separate API, OCR, Biometric, Blockchain services). **However**, all share same MySQL DB, local filesystem for uploads, and in-process state. Not truly stateless — cannot horizontally scale without shared storage/session solutions. |
 | NFR-4.2 | يدعم إضافة أنواع وثائق جديدة بدون تغيير الكود | ✅     | CRUD API for `document_types` (admin can create/edit/delete). `folder_name` links to reference data in `ai/data/references/{folder_name}/`. Adding new type = create DB record + add reference images.                                                                 |
-| NFR-4.3 | يدعم إضافة خدمات تحقق إضافية                  | ⚠️     | Pipeline stages are hardcoded in `verification_orchestrator.py` (9 fixed stages). Adding a new stage requires code modification. No plugin system or dynamic stage configuration.                                                                                      |
+| NFR-4.3 | يدعم إضافة خدمات تحقق إضافية                  | ⚠️     | Pipeline stages are defined in `verification_orchestrator.py` (8 stages). Adding a new stage requires code modification but is clearly structured. No plugin system or dynamic stage configuration.                                                                    |
 
 ## NFR-5. الأمان (Security)
 
@@ -307,12 +307,12 @@
 
 ## NFR-6. القابلية للصيانة (Maintainability)
 
-| #       | Requirement                 | Status | Evidence                                                                                                                                                                                     |
-| ------- | --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NFR-6.1 | كود نظيف ومنظّم مع تعليقات  | ⚠️     | Code is organized into clear folders (routers/, services/, models). **However**, minimal code comments. No docstrings on most functions. Many files lack header comments explaining purpose. |
-| NFR-6.2 | اختبارات وحدة (Unit Tests)  | ❌     | **No test files found anywhere in the project.** No `tests/` directory, no `test_*.py` files, no `*_test.dart` files. Zero test coverage.                                                    |
-| NFR-6.3 | توثيق API (Swagger/OpenAPI) | ✅     | FastAPI auto-generates Swagger UI at `/docs` and ReDoc at `/redoc`. Endpoint descriptions come from function docstrings (some present, many missing).                                        |
-| NFR-6.4 | إدارة الإصدارات (Git)       | ✅     | Project is in a Git repository (`.gitignore` present, git commands used during analysis). Version control is active.                                                                         |
+| #       | Requirement                 | Status | Evidence                                                                                                                                                                                                                                                           |
+| ------- | --------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| NFR-6.1 | كود نظيف ومنظّم مع تعليقات  | ✅     | Code is organized into clear folders (routers/, services/, models). Key modules now have **Arabic + English docstrings**: orchestrator, steps_service, admin_verification_router, blockchain_router. Module-level docstrings describe purpose and pipeline stages. |
+| NFR-6.2 | اختبارات وحدة (Unit Tests)  | ❌     | **No test files found anywhere in the project.** No `tests/` directory, no `test_*.py` files, no `*_test.dart` files. Zero test coverage.                                                                                                                          |
+| NFR-6.3 | توثيق API (Swagger/OpenAPI) | ✅     | FastAPI auto-generates Swagger UI at `/docs` and ReDoc at `/redoc`. Endpoint descriptions come from function docstrings (some present, many missing).                                                                                                              |
+| NFR-6.4 | إدارة الإصدارات (Git)       | ✅     | Project is in a Git repository (`.gitignore` present, git commands used during analysis). Version control is active.                                                                                                                                               |
 
 ## NFR-7. التوافق (Compatibility)
 
@@ -341,11 +341,11 @@
 | ------------------------ | -------------- | ---------- | ---------- | ------ | ------------ |
 | 1. إدارة الحسابات        | 2              | 2          | 14         | 18     | 11%          |
 | 2. المستخدمين والصلاحيات | 6              | 2          | 0          | 8      | 75%          |
-| 3. إدارة الوثائق         | 8              | 4          | 1          | 13     | 62%          |
-| 4. التحقق والتحليل       | 6              | 5          | 5          | 16     | 38%          |
-| 5. التقارير              | 5              | 1          | 4          | 10     | 50%          |
+| 3. إدارة الوثائق         | 9              | 3          | 1          | 13     | 69%          |
+| 4. التحقق والتحليل       | 12             | 3          | 1          | 16     | 75%          |
+| 5. التقارير              | 9              | 1          | 0          | 10     | 90%          |
 | 6. الإشعارات             | 0              | 0          | 6          | 6      | 0%           |
-| **TOTAL Functional**     | **27**         | **14**     | **30**     | **71** | **38%**      |
+| **TOTAL Functional**     | **38**         | **11**     | **22**     | **71** | **54%**      |
 
 ## Non-Functional Requirements (NFR-1 to NFR-8)
 
@@ -356,20 +356,20 @@
 | NFR-3. الموثوقية                 | 0              | 2          | 1          | 3      | 0%           |
 | NFR-4. القابلية للتوسع           | 1              | 2          | 0          | 3      | 33%          |
 | NFR-5. الأمان                    | 0              | 3          | 3          | 6      | 0%           |
-| NFR-6. القابلية للصيانة          | 2              | 1          | 1          | 4      | 50%          |
+| NFR-6. القابلية للصيانة          | 3              | 0          | 1          | 4      | 75%          |
 | NFR-7. التوافق                   | 2              | 1          | 0          | 3      | 67%          |
-| NFR-8. المراقبة والنسخ الاحتياطي | 0              | 1          | 3          | 4      | 0%           |
-| **TOTAL Non-Functional**         | **5**          | **16**     | **8**      | **29** | **17%**      |
+| NFR-8. المراقبة والنسخ الاحتياطي | 0              | 2          | 2          | 4      | 0%           |
+| **TOTAL Non-Functional**         | **6**          | **16**     | **7**      | **29** | **21%**      |
 
 ## Overall Project Status
 
 | Category        | ✅     | ⚠️     | ❌     | Total   | Completion |
 | --------------- | ------ | ------ | ------ | ------- | ---------- |
-| Functional      | 27     | 14     | 30     | 71      | 38%        |
-| Non-Functional  | 5      | 16     | 8      | 29      | 17%        |
-| **GRAND TOTAL** | **32** | **30** | **38** | **100** | **32%**    |
+| Functional      | 38     | 11     | 22     | 71      | 54%        |
+| Non-Functional  | 6      | 16     | 7      | 29      | 21%        |
+| **GRAND TOTAL** | **44** | **27** | **29** | **100** | **44%**    |
 
-> **Overall Project Completion: ~32%** (counting ✅ as fully done, ⚠️ as half credit → weighted: 32 + 15 = 47 out of 100 → **~47% weighted**)
+> **Overall Project Completion: ~44%** (counting ✅ as fully done, ⚠️ as half credit → weighted: 44 + 13.5 = 57.5 out of 100 → **~58% weighted**)
 
 ---
 
@@ -380,13 +380,13 @@
 3. **❌ Unit Tests** — Zero test files across entire project
 4. **❌ HTTPS** — Server runs on plain HTTP
 5. **❌ Rate Limiting** — No brute-force protection on login or any endpoint
-6. **❌ External Database Verification** — No government/third-party data validation
-7. **❌ Admin Manual Review** — Admins can view but not override verification decisions
-8. **❌ Backup System** — No automated database or file backup
+6. **⚠️ External Database Verification** — Local citizen_records simulation exists, no real government API integration
+7. **⚠️ Admin Manual Review** — Admins can view + add notes, but cannot override verification decisions
+8. **⚠️ Backup System** — backup_db.py script exists but no automated scheduling
 9. **❌ Monitoring** — No system health monitoring or alerting
-10. **⚠️ AI Forgery Detection** — Uses SSIM template matching, not a trained deep learning model
+10. **❌ Account Management** — No password change, profile edit, session management, or account deactivation UI
 
 ---
 
 _Report generated by automated code analysis. Each finding is backed by direct source code evidence._
-_Last updated: 2025_
+_Last updated: 2025 (post system overhaul: YOLOv8+Siamese AI, MultiChain-only blockchain, 8-stage pipeline, dashboard analytics with charts, data verification, admin notes)_
