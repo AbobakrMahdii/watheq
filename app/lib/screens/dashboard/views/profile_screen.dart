@@ -5,6 +5,7 @@ import '../../../core/constants/app_dimensions.dart';
 import '../../../features/auth/models/user_profile.dart';
 import '../../../features/auth/services/auth_service.dart';
 import '../../../ui/widgets/app_snackbars.dart';
+import 'change_password_screen.dart';
 import 'verification_history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -89,8 +90,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 30,
-                            backgroundColor:
-                                AppColors.primary.withOpacity(0.12),
+                            backgroundColor: AppColors.primary.withOpacity(
+                              0.12,
+                            ),
                             child: Text(
                               _avatarLetters(),
                               style: const TextStyle(
@@ -114,7 +116,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Text(
                                   _profile?.email ?? '—',
                                   style: const TextStyle(
-                                      color: Colors.grey, fontSize: 12),
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
                                 ),
                                 Text('الدور: ${_profile?.role ?? '—'}'),
                               ],
@@ -127,12 +131,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: AppDimensions.padLg),
                   Card(
                     child: ListTile(
-                      leading: const Icon(Icons.verified_user_outlined,
-                          color: AppColors.primary),
+                      leading: const Icon(
+                        Icons.verified_user_outlined,
+                        color: AppColors.primary,
+                      ),
                       title: const Text(
                         'سجل عمليات التحقق',
-                        style:
-                            TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
                       ),
                       subtitle: const Text(
                         'اعرض كل عمليات التحقق الخاصة بك مع إحصاءات تفصيلية.',
@@ -144,6 +152,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const VerificationHistoryScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.padSm),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.lock_outline,
+                        color: AppColors.primary,
+                      ),
+                      title: const Text(
+                        'تغيير كلمة المرور',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'قم بتحديث كلمة المرور الخاصة بك لحماية حسابك.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ChangePasswordScreen(),
                           ),
                         );
                       },

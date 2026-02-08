@@ -115,6 +115,30 @@ class AuthService {
       throw AuthException(message, cause: e);
     }
   }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final session = await getSavedSession();
+    if (session == null) {
+      throw AuthException('غير مسجل الدخول');
+    }
+
+    try {
+      final dio = ApiClient(accessToken: session.accessToken).dio;
+      await dio.put(
+        '/api/v1/auth/change-password',
+        data: {
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        },
+      );
+    } catch (e) {
+      final message = NetworkExceptions.toUserMessage(e);
+      throw AuthException(message, cause: e);
+    }
+  }
 }
 
 class AuthException implements Exception {
