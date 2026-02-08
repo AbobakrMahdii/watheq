@@ -7,8 +7,8 @@ echo.
 
 cd /d "%~dp0.."
 
-REM Run AI training for any untrained document types (skips already trained)
-echo [0/5] Checking AI models...
+REM Check AI models — train any untrained document types (v3 pipeline)
+echo [0/5] Checking AI models (v3 — ElementClassifier + FontAnalyzer)...
 python ai\train_ai.py --all 2>nul
 if errorlevel 0 (
     echo      AI models ready.

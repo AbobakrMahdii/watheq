@@ -1,9 +1,9 @@
 @echo off
-REM Train AI Models for Watheq
-REM Runs training for all document types that haven't been trained yet
+REM Watheq AI Training Pipeline v3
+REM Trains ElementClassifier + FontAnalyzer per document type
 
 echo ========================================
-echo Watheq AI Training
+echo   Watheq AI Training Pipeline v3
 echo ========================================
 echo.
 
@@ -18,11 +18,11 @@ if errorlevel 1 (
 )
 
 echo Starting AI training for all document types...
-echo This will skip already trained types.
+echo Uses layout_config.yaml per doc type.
 echo.
 
-REM Run the training script
-python ai\train_ai.py --all
+REM Run the training script (--force to retrain even if already done)
+python ai\train_ai.py --all --force
 
 echo.
 echo ========================================

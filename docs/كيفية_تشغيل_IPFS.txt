@@ -6,9 +6,9 @@
 
 1.  **افتح نافذة Command Prompt (CMD) جديدة أو PowerShell** (خارج Cursor IDE).
 
-2.  **انتقل إلى مجلد المشروع الرئيسي (`‏‏watheq - نسخة`)**:
+2.  **انتقل إلى مجلد المشروع الرئيسي:**
     ```bash
-    cd "c:\Users\sadeq\Desktop\المشروع_2\‏‏watheq - نسخة"
+    cd "c:\Users\Abobakr_Mahdi\Desktop\watheq"
     ```
 
 3.  **تأكد من أن Docker Desktop يعمل.**
@@ -16,24 +16,20 @@
 
 4.  **قم بتشغيل IPFS باستخدام Docker Compose:**
     ```bash
-    docker-compose -f infrastructure\docker-compose.ledger.yml up --remove-orphans
+    docker-compose -p watheq-ipfs -f infrastructure\docker-compose.ipfs.yml up -d --remove-orphans
     ```
-    *   **ملاحظة:** تأكد من كتابة الأمر كاملاً. `infrastructure\docker-compose.ledger.yml` هو المسار إلى ملف Docker Compose.
 
-5.  **لا تغلق هذه النافذة.** ستبقى مفتوحة لعرض سجلات IPFS.
-
-    *   **يجب أن ترى رسائل تشغيل IPFS في هذه النافذة، مثل:**
-        ```
-        ... Creating ipfs-node ... done
-        ... Attaching to ipfs-node
-        ipfs-node    | ... starting go-ipfs ...
-        ```
+5.  **تحقق من أن الحاوية تعمل:**
+    ```bash
+    docker ps
+    ```
+    يجب أن ترى حاوية باسم `ipfs-node` في القائمة.
 
 ═══════════════════════════════════════════════════════════════
 **بعد تشغيل IPFS بنجاح:**
 
    يمكنك التحقق من حالة IPFS عن طريق زيارة الروابط التالية في متصفحك:
-   - **IPFS API:**         http://localhost:5001
-   - **IPFS Gateway:**     http://localhost:8081
+   - **IPFS API:**         http://localhost:15001
+   - **IPFS Gateway:**     http://localhost:18080
 
 ═══════════════════════════════════════════════════════════════
