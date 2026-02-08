@@ -2,7 +2,7 @@
   "doc_type": "identity",
   "version": "3.0",
   "model": "ElementClassifier (EfficientNet-B0 binary)",
-  "trained_at": "2026-02-08T08:38:50.617593",
+  "trained_at": "2026-02-08T08:44:07.432842",
   "layout": {
     "logo_main": {
       "roi": {
@@ -88,21 +88,6 @@
     "suspicious_score": 0.7
   },
   "augmentation_results": {
-    "logo": {
-      "status": "skipped",
-      "message": "Data exists (400g + 400f). Use --force to regenerate.",
-      "element": "logo"
-    },
-    "seal": {
-      "status": "skipped",
-      "message": "Data exists (400g + 400f). Use --force to regenerate.",
-      "element": "seal"
-    },
-    "full": {
-      "status": "skipped",
-      "message": "Data exists (400g + 400f). Use --force to regenerate.",
-      "element": "full"
-    },
     "barcode": {
       "status": "error",
       "message": "OpenCV(4.13.0) D:\\a\\opencv-python\\opencv-python\\opencv\\modules\\imgcodecs\\src\\loadsave.cpp:1310: error: (-215:Assertion failed) !buf.empty() in function 'cv::imdecode_'\n",
@@ -111,31 +96,22 @@
   },
   "classifier_results": {
     "logo_main": {
-      "status": "success",
-      "best_val_loss": 0.0227,
-      "best_val_acc": 1.0,
-      "epochs_trained": 50,
-      "total_images": 800,
+      "status": "skipped",
+      "message": "identity_logo_main.pt already exists",
       "class_name": "logo_main",
       "ref_stem": "logo",
       "weight_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\weights\\identity_logo_main.pt"
     },
     "stamp": {
-      "status": "success",
-      "best_val_loss": 0.0299,
-      "best_val_acc": 1.0,
-      "epochs_trained": 50,
-      "total_images": 800,
+      "status": "skipped",
+      "message": "identity_stamp.pt already exists",
       "class_name": "stamp",
       "ref_stem": "seal",
       "weight_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\weights\\identity_stamp.pt"
     },
     "photo_primary": {
-      "status": "success",
-      "best_val_loss": 0.0345,
-      "best_val_acc": 1.0,
-      "epochs_trained": 50,
-      "total_images": 800,
+      "status": "skipped",
+      "message": "identity_photo_primary.pt already exists",
       "class_name": "photo_primary",
       "ref_stem": "full",
       "weight_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\weights\\identity_photo_primary.pt"

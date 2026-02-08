@@ -26,14 +26,14 @@ echo.
 
 REM Start IPFS in a new window (Docker)
 echo [1/5] Starting IPFS...
-start "Watheq - IPFS" cmd /k "%~dp0start_ipfs.bat"
+start "Watheq - IPFS" cmd /c "%~dp0start_ipfs.bat"
 
 REM Wait a bit for IPFS to start
 timeout /t 3 /nobreak >nul
 
 REM Start MultiChain in a new window (Docker)
 echo [2/5] Starting MultiChain Blockchain...
-start "Watheq - MultiChain" cmd /k "%~dp0start_multichain.bat"
+start "Watheq - MultiChain" cmd /c "%~dp0start_multichain.bat"
 
 REM Wait a bit for MultiChain RPC to become ready
 timeout /t 5 /nobreak >nul
