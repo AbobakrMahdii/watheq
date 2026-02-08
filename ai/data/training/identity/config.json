@@ -7,12 +7,15 @@
     "seal"
   ],
   "thresholds": {
-    "full": 0.8,
-    "seal": 0.8
+    "barcode": 0.5,
+    "full": 0.5,
+    "logo": 0.5,
+    "seal": 0.5
   },
-  "trained_at": "2026-02-07T07:12:41.667520",
-  "version": "1.0",
-  "results": {
+  "trained_at": "2026-02-08T00:31:42.581197",
+  "version": "2.0",
+  "model": "YOLOv8 + Siamese (EfficientNet-B0)",
+  "augmentation_results": {
     "barcode": {
       "status": "error",
       "message": "'NoneType' object has no attribute 'ndim'",
@@ -23,21 +26,48 @@
       "element": "full",
       "reference_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\refrences\\identity\\full.jpeg",
       "output_dir": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\training\\identity\\full",
-      "trained_at": "2026-02-07T07:12:38.346794",
-      "threshold": 0.8
+      "generated_at": "2026-02-08T00:31:32.937322"
     },
     "logo": {
-      "status": "error",
-      "message": "'NoneType' object has no attribute 'ndim'",
-      "element": "logo"
+      "status": "success",
+      "element": "logo",
+      "reference_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\refrences\\identity\\logo.png",
+      "output_dir": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\training\\identity\\logo",
+      "generated_at": "2026-02-08T00:31:37.444240"
     },
     "seal": {
       "status": "success",
       "element": "seal",
       "reference_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\refrences\\identity\\seal.jpeg",
       "output_dir": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\data\\training\\identity\\seal",
-      "trained_at": "2026-02-07T07:12:41.667378",
-      "threshold": 0.8
+      "generated_at": "2026-02-08T00:31:40.563169"
+    }
+  },
+  "embedding_results": {
+    "barcode": {
+      "status": "error",
+      "message": "No images to embed"
+    },
+    "full": {
+      "status": "success",
+      "images_used": 51,
+      "embedding_shape": [
+        128
+      ]
+    },
+    "logo": {
+      "status": "success",
+      "images_used": 51,
+      "embedding_shape": [
+        128
+      ]
+    },
+    "seal": {
+      "status": "success",
+      "images_used": 51,
+      "embedding_shape": [
+        128
+      ]
     }
   }
 }
