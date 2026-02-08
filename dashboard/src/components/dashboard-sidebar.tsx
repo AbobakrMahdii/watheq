@@ -27,10 +27,12 @@ export default function DashboardSidebar() {
 
   const links = useMemo(() => {
     const baseLinks = [
-      { href: "/dashboard", label: "Overview" },
-      { href: "/dashboard/users", label: "Users" },
-      { href: "/dashboard/document-types", label: "Document Types" },
-      { href: "/dashboard/audit-logs", label: "Audit Logs" },
+      { href: "/dashboard", label: "نظرة عامة" },
+      { href: "/dashboard/verifications", label: "التحققات" },
+      { href: "/dashboard/users", label: "المستخدمون" },
+      { href: "/dashboard/document-types", label: "أنواع الوثائق" },
+      { href: "/dashboard/reports", label: "التقارير" },
+      { href: "/dashboard/audit-logs", label: "سجل العمليات" },
     ];
     if (me?.role === "super_admin") {
       baseLinks.splice(2, 0, { href: "/dashboard/admins", label: "Admins" });
@@ -48,10 +50,10 @@ export default function DashboardSidebar() {
   }
 
   return (
-    <aside className="w-64 bg-white border-r min-h-screen p-4">
+    <aside className="min-h-screen w-64 border-r bg-white p-4">
       <div className="mb-6">
         <div className="text-sm text-slate-500">Signed in as</div>
-        <div className="font-medium truncate">{me?.email || "—"}</div>
+        <div className="truncate font-medium">{me?.email || "—"}</div>
         <div className="text-xs text-slate-500">{me?.role || "—"}</div>
       </div>
 
