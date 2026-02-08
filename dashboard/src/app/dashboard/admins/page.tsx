@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 type User = {
@@ -13,7 +12,6 @@ type User = {
 };
 
 export default function AdminsPage() {
-  const router = useRouter();
   const [me, setMe] = useState<{ role?: string; email?: string } | null>(null);
   const [admins, setAdmins] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +47,6 @@ export default function AdminsPage() {
       setAdmins(Array.isArray(adminsData) ? adminsData : []);
     } catch (e: any) {
       toast.error(e?.message || "Failed to load admins");
-      router.push("/auth/login");
     } finally {
       setLoading(false);
     }

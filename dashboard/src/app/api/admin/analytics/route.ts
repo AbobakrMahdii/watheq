@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { getBackendBaseUrl, getBearerTokenFromCookies } from "@/lib/backend";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const token = await getBearerTokenFromCookies();
   if (!token) return NextResponse.json({ message: "Missing token" }, { status: 401 });
 
-  const upstream = await fetch(`${getBackendBaseUrl()}/api/v1/admin/analytics`, {
+  const url = new URL(req.url);
+  const upstream = await fetch(`${getBackendBaseUrl()}/api/v1/admin/analytics?${url.searchParams.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
