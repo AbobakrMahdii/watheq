@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
@@ -33,11 +35,15 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
   int _stableFrames = 0;
 
   /// Number of stable frames needed before enabling capture.
-  static const int _requiredStableFrames = 4;
+  static const int _requiredStableFrames = 5;
 
   /// Debounce: consecutive frames where card is NOT detected.
   int _notDetectedFrames = 0;
   static const int _requiredNotDetectedFrames = 3;
+
+  /// Consecutive frames analysed — after a timeout we allow manual capture.
+  int _totalFrames = 0;
+  static const int _manualCaptureAfterFrames = 90; // ~3 seconds at 30 fps
 
   /// Monotonic counter for unique AnimatedSwitcher keys.
   int _hintSeq = 0;
@@ -128,6 +134,8 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
     final frameX = ((width - frameW) / 2).round();
     final frameY = ((height - frameH) / 2).round();
 
+    _totalFrames++;
+
     const step = 3; // skip pixels for speed
 
     // ── 1. Average brightness — reject overexposed / glare / lighter ──
@@ -147,12 +155,14 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
 
     // ── 2. Divide frame into 3×3 grid — count zones with edges ──
     // A real ID card has text/photo/patterns spread across the surface.
-    // A lighter or lamp only has edges in 1-2 zones.
+    // Random objects or textured surfaces won't have the structured pattern
+    // of a real document (text-heavy zones mixed with blank zones).
     const gridCols = 3;
     const gridRows = 3;
     final zoneW = frameW ~/ gridCols;
     final zoneH = frameH ~/ gridRows;
     int zonesWithEdges = 0;
+    final zoneDensities = <double>[];
 
     for (var gr = 0; gr < gridRows; gr++) {
       for (var gc = 0; gc < gridCols; gc++) {
@@ -168,14 +178,36 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
             final px = bytes[idx + 1];
             final py = bytes[idx + rowStride];
             final grad = (px - p).abs() + (py - p).abs();
-            if (grad > 25) zEdges++;
+            if (grad > 30) zEdges++;
             zTotal++;
           }
         }
-        if (zTotal > 0 && zEdges / zTotal >= 0.02) {
+        final density = zTotal > 0 ? zEdges / zTotal : 0.0;
+        zoneDensities.add(density);
+        if (density >= 0.03) {
           zonesWithEdges++;
         }
       }
+    }
+
+    // ── 2b. Zone variance — documents have structured content ──
+    // Real documents have varied zones (text-heavy vs blank/photo areas).
+    // A uniformly textured surface (table, fabric) has similar density
+    // across all zones. Require minimum variance.
+    double zoneMean = 0;
+    for (final d in zoneDensities) {
+      zoneMean += d;
+    }
+    zoneMean /= zoneDensities.length;
+    double zoneVariance = 0;
+    for (final d in zoneDensities) {
+      zoneVariance += (d - zoneMean) * (d - zoneMean);
+    }
+    zoneVariance /= zoneDensities.length;
+    // Also require at least one zone with high edge density (text area)
+    double maxZoneDensity = 0;
+    for (final d in zoneDensities) {
+      if (d > maxZoneDensity) maxZoneDensity = d;
     }
 
     // ── 3. Border edge density (card edges must be visible) ──
@@ -192,7 +224,7 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
           final px = bytes[idx + 1];
           final py = bytes[idx + rowStride];
           final grad = (px - p).abs() + (py - p).abs();
-          if (grad > 25) borderEdgePixels++;
+          if (grad > 30) borderEdgePixels++;
           borderTotal++;
         }
       }
@@ -206,7 +238,7 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
           final px = bytes[idx + 1];
           final py = bytes[idx + rowStride];
           final grad = (px - p).abs() + (py - p).abs();
-          if (grad > 25) borderEdgePixels++;
+          if (grad > 30) borderEdgePixels++;
           borderTotal++;
         }
       }
@@ -218,18 +250,32 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
 
     // ── Decision ──
     // Card detected when:
-    //   • Not overexposed (avg brightness < 220) — rejects lighters/lamps
-    //   • Edges spread across ≥ 5 of 9 zones — rejects small objects
-    //   • Border edges visible (≥ 8%) — card edges in frame
+    //   • Not overexposed (avg brightness < 220)
+    //   • Not too dark (avg brightness > 30)
+    //   • Edges spread across ≥ 5 of 9 zones
+    //   • Border edges visible (≥ 6%)
+    //   • Zone variance ≥ 0.0002 — some structure, not pure uniform texture
+    //   • At least one zone with ≥ 8% edges — text/detail present
     final detected =
-        avgBrightness < 220 && zonesWithEdges >= 5 && borderDensity >= 0.08;
+        avgBrightness < 220 &&
+        avgBrightness > 30 &&
+        zonesWithEdges >= 5 &&
+        borderDensity >= 0.06 &&
+        zoneVariance >= 0.0002 &&
+        maxZoneDensity >= 0.08;
 
     String hint;
     if (avgBrightness >= 220) {
       hint = 'الإضاءة شديدة — أبعد مصدر الضوء';
+    } else if (avgBrightness <= 30) {
+      hint = 'الإضاءة ضعيفة — قرّب مصدر ضوء';
     } else if (zonesWithEdges < 5) {
       hint = 'ضع البطاقة داخل الإطار';
-    } else if (borderDensity < 0.08) {
+    } else if (maxZoneDensity < 0.08) {
+      hint = 'تأكد من أن البطاقة واضحة';
+    } else if (zoneVariance < 0.0002) {
+      hint = 'ضع البطاقة وليس سطحاً عادياً';
+    } else if (borderDensity < 0.06) {
       hint = 'قرّب البطاقة لتملأ الإطار';
     } else {
       hint = 'ثابت! اضغط لالتقاط الصورة';
@@ -250,12 +296,21 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
 
     final readyNow = _stableFrames >= _requiredStableFrames;
 
-    if (mounted && (readyNow != _cardDetected || hint != _hint)) {
+    // Allow manual capture after a timeout so the user is never stuck.
+    final manualAllowed = _totalFrames >= _manualCaptureAfterFrames;
+
+    if (mounted &&
+        (readyNow != _cardDetected || hint != _hint || manualAllowed)) {
       setState(() {
-        _cardDetected = readyNow;
+        _cardDetected = readyNow || manualAllowed;
         if (hint != _hint) {
           _hint = hint;
           _hintSeq++; // unique key for AnimatedSwitcher
+        }
+        // Update hint when manual capture kicks in but auto-detect did not fire
+        if (!readyNow && manualAllowed && !hint.contains('اضغط')) {
+          _hint = 'اضغط لالتقاط الصورة';
+          _hintSeq++;
         }
       });
     }
@@ -287,16 +342,84 @@ class _DocumentCaptureScreenState extends State<DocumentCaptureScreen> {
     if (_controller == null || _isProcessing) return;
     try {
       await _stopImageStream();
-      final image = await _controller!.takePicture();
-      // Pass the full captured image — the card detection already ensures the
-      // document fills the frame. Auto-cropping was cutting into the document
-      // because the camera sensor aspect ratio differs from the screen preview.
-      await _handleFile(File(image.path));
+      setState(() => _isProcessing = true);
+      final xFile = await _controller!.takePicture();
+
+      // Crop the captured image to the overlay frame region.
+      // The overlay is centred at 85% of screen width with aspect 1.6.
+      // The camera sensor may have a different resolution/aspect than the
+      // screen preview, so we compute the crop rect relative to the
+      // actual image dimensions, matching what the user sees on screen.
+      final croppedFile = await _cropToOverlay(File(xFile.path));
+      setState(() => _isProcessing = false);
+      await _handleFile(croppedFile);
     } catch (e) {
+      debugPrint('Capture/crop error: $e');
+      setState(() => _isProcessing = false);
       AppSnackbars.error(context, 'فشل التقاط الصورة');
       // Restart stream so detection resumes.
       await _startImageStream();
     }
+  }
+
+  /// Crop [file] to the overlay frame rectangle that the user sees.
+  ///
+  /// The overlay is centred horizontally at 85 % of the preview width
+  /// with aspect ratio 1.6.  We map those proportions onto the full-
+  /// resolution captured image.
+  Future<File> _cropToOverlay(File file) async {
+    final bytes = await file.readAsBytes();
+    var decoded = img.decodeImage(bytes);
+    if (decoded == null) return file; // could not decode – return original
+
+    // Auto-orient using EXIF so the crop coordinates are correct.
+    decoded = img.bakeOrientation(decoded);
+
+    final imgW = decoded.width;
+    final imgH = decoded.height;
+
+    // The preview fills the screen width.  The overlay is 85 % of that
+    // width, centred, with aspect ratio 1.6 (width / height).
+    // The camera image may be landscape (rotated) — the longer side
+    // corresponds to whatever the camera reports as width after EXIF
+    // orientation is applied.
+    const overlayWidthFraction = 0.85;
+    const overlayAspect = 1.6; // width / height
+
+    // Compute overlay rect in image pixel space.
+    // The preview stretches the camera image to fill the screen width.
+    // Vertically the preview is centred.  The overlay is centred both ways.
+    //
+    // We compute the crop as if the image has the same proportional
+    // layout the user saw on screen.
+    final cropW = (imgW * overlayWidthFraction).round();
+    final cropH = (cropW / overlayAspect).round();
+    final cropX = ((imgW - cropW) / 2).round();
+    final cropY = ((imgH - cropH) / 2).round();
+
+    // Safety: clamp inside image bounds
+    final x1 = cropX.clamp(0, imgW - 1);
+    final y1 = cropY.clamp(0, imgH - 1);
+    final x2 = (cropX + cropW).clamp(0, imgW);
+    final y2 = (cropY + cropH).clamp(0, imgH);
+
+    if (x2 - x1 < 50 || y2 - y1 < 50) return file; // sanity guard
+
+    final cropped = img.copyCrop(
+      decoded,
+      x: x1,
+      y: y1,
+      width: x2 - x1,
+      height: y2 - y1,
+    );
+
+    // Write to a new temp file
+    final dir = await getTemporaryDirectory();
+    final outPath =
+        '${dir.path}/doc_cropped_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final outFile = File(outPath);
+    await outFile.writeAsBytes(img.encodeJpg(cropped, quality: 92));
+    return outFile;
   }
 
   Future<void> _pickFromGallery() async {
