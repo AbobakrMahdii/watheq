@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/widgets/verification_fab.dart';
 import 'views/home_screen.dart';
 import 'views/profile_screen.dart';
 
@@ -17,7 +18,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: Stack(children: [_screens[_currentIndex], const VerificationFab()]),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
