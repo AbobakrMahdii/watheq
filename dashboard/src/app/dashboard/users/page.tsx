@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 type User = {
@@ -15,7 +14,6 @@ type User = {
 };
 
 export default function UsersPage() {
-  const router = useRouter();
   const [me, setMe] = useState<{ role?: string; email?: string } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,7 +48,6 @@ export default function UsersPage() {
       setUsers(Array.isArray(usersData) ? usersData : []);
     } catch (e: any) {
       toast.error(e?.message || "Failed to load users");
-      router.push("/auth/login");
     } finally {
       setLoading(false);
     }
