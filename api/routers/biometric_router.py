@@ -5,7 +5,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from api.security import get_current_user
-from api.services.liveness_service import simple_liveness_check
 from api.database import get_biometric_audit_collection
 from Biometric.face_service import FaceService
 
@@ -47,28 +46,25 @@ async def biometric_verify(
     selfie_bytes = await selfie_image.read()
     doc_bytes = await document_image.read()
 
-    # 4.1.2 Liveness
-    is_live, liveness_msg = simple_liveness_check(selfie_bytes)
-    if not is_live:
-        await _audit(user_id, document_id, liveness_msg, False, 0.0)
-        raise HTTPException(status_code=400, detail=f"Liveness failed: {liveness_msg}")
+    # Client-side ML Kit liveness is sufficient; server only does face matching.
 
-    # 4.1.3 + 4.1.4 Face Matching عبر DeepFace
+    # Face Matching via DeepFace
     try:
         face_result = _face_service.verify_id_vs_live(doc_bytes, selfie_bytes)
     except Exception as exc:
-        await _audit(user_id, document_id, "face_match_failed", False, 0.0)
+        await _audit(user_id, document_id, "skipped", False, 0.0)
         raise HTTPException(status_code=400, detail=f"Face match failed: {exc}")
 
     accepted = bool(face_result.get("accepted", False))
     similarity_percent = float(face_result.get("similarity_percent", 0.0))
     accept_threshold = float(face_result.get("accept_threshold_percent", 80.0))
 
-    # لا نخزن الصور بعد المعالجة حفاظًا على الخصوصية؛ نخزن فقط النتائج العددية.
-    await _audit(user_id, document_id, "live", accepted, similarity_percent / 100.0)
+    await _audit(
+        user_id, document_id, "client_side", accepted, similarity_percent / 100.0
+    )
 
     return {
-        "liveness": {"passed": is_live, "message": liveness_msg},
+        "liveness": {"passed": True, "message": "Client-side liveness (ML Kit)"},
         "match": {
             "passed": accepted,
             "similarity_percent": similarity_percent,

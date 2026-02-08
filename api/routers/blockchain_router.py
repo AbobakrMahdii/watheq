@@ -1,3 +1,12 @@
+"""Blockchain Router — واجهة البلوكتشين
+
+Endpoints for document registration and verification on MultiChain + IPFS:
+- POST /upload — upload, hash-check, IPFS pin, publish to chain
+- GET /documents — list all chain records
+- GET /documents/{id} — lookup by document ID
+- GET /verify/{hash} — verify a document by SHA-256 hash
+"""
+
 from __future__ import annotations
 
 import time
@@ -128,3 +137,33 @@ def get_document(document_id: str):
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"MultiChain error: {exc}")
+
+
+@router.get("/verify/{file_hash}")
+async def verify_by_hash(file_hash: str):
+    """
+    التحقق مما إذا كانت وثيقة (عبر بصمة SHA-256) مسجلة على البلوكتشين + IPFS.
+    يرجع بيانات التسجيل إذا وُجدت، أو 404.
+    """
+    hashes = get_document_hashes_collection()
+    record = await hashes.find_by_hash(file_hash)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail="لا يوجد سجل لهذه البصمة على البلوكتشين",
+        )
+
+    # Fetch full metadata from MultiChain if possible
+    chain_data = None
+    try:
+        chain_data = get_item_by_key(record.get("document_id", ""))
+    except Exception:
+        pass
+
+    return {
+        "verified": True,
+        "document_id": record.get("document_id"),
+        "hash": file_hash,
+        "cid": record.get("cid"),
+        "chain_data": chain_data,
+    }
