@@ -29,6 +29,8 @@ async def seed_super_admin() -> None:
                 "email": SUPER_ADMIN["email"],
                 "password": get_password_hash(SUPER_ADMIN["password"]),
                 "role": SUPER_ADMIN["role"],
+                "is_active": True,
+                "deleted_at": None,
             }
         )
 

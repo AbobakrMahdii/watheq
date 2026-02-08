@@ -25,9 +25,6 @@ class DocumentTypeService:
     async def create_document_type(self, doc_type_data: DocumentTypeCreate) -> DocumentTypeInDB:
         """Creates a new document type."""
         doc_dict = doc_type_data.model_dump()
-        # The `created_at` field is automatically handled by MySQL with `DEFAULT CURRENT_TIMESTAMP`
-        # We explicitly set a dummy value here for Pydantic validation if needed, but it's ignored by the DB insert
-        doc_dict["created_at"] = ""
 
         # Insert into DB, get the new ID (insert_one returns the last inserted ID)
         new_id = await self.collection.insert_one(doc_dict)
