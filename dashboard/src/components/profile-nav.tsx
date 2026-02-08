@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { toast } from "sonner";
 
@@ -93,6 +94,12 @@ export default function ProfileNav() {
             {me?.role || "ROLE"}
           </Badge>
           <span className="text-xs text-slate-500">ID: {me?.id ?? "—"}</span>
+          <Link
+            href="/dashboard/profile"
+            className="ml-2 rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-slate-800"
+          >
+            الملف الشخصي
+          </Link>
         </div>
       </div>
 

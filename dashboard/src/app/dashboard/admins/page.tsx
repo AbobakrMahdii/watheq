@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type User = {
   _id: string;
@@ -9,10 +10,11 @@ type User = {
   username?: string | null;
   email: string;
   role: string;
+  is_first_super_admin?: boolean;
 };
 
 export default function AdminsPage() {
-  const [me, setMe] = useState<{ role?: string; email?: string } | null>(null);
+  const [me, setMe] = useState<{ id?: string | number; role?: string; email?: string } | null>(null);
   const [admins, setAdmins] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -20,6 +22,14 @@ export default function AdminsPage() {
   const [formUsername, setFormUsername] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
+
+  // Edit dialog state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
 
   function resetForm() {
     setFormName("");
@@ -82,7 +92,6 @@ export default function AdminsPage() {
 
   async function demoteToUser(id: string, role: string) {
     if (me?.role !== "super_admin") return toast.error("Super admin only");
-    if (role === "super_admin") return toast.error("Cannot demote super admin");
     try {
       const res = await fetch(`/api/admin/users/${id}/remove-admin`, { method: "PUT" });
       const data = await res.json().catch(() => ({}));
@@ -94,6 +103,48 @@ export default function AdminsPage() {
     }
   }
 
+  function openEdit(u: User) {
+    setEditingAdmin(u);
+    setEditName(u.name || "");
+    setEditUsername(u.username || "");
+    setEditEmail(u.email || "");
+    setEditPassword("");
+    setEditOpen(true);
+  }
+
+  async function submitEdit() {
+    if (!editingAdmin) return;
+    const body: Record<string, string> = {};
+    if (editName !== (editingAdmin.name || "")) body.name = editName;
+    if (editUsername !== (editingAdmin.username || "")) body.username = editUsername;
+    if (editEmail !== (editingAdmin.email || "")) body.email = editEmail;
+    if (editPassword) body.password = editPassword;
+
+    if (Object.keys(body).length === 0) {
+      toast.info("No changes to save");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/users/${editingAdmin._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Request failed");
+      toast.success("Admin updated");
+      setEditOpen(false);
+      await loadAdmins();
+    } catch (e: any) {
+      toast.error(e?.message || "Request failed");
+    }
+  }
+
+  // Determine if the current user is the first (primary) super admin
+  const meId = me?.id != null ? String(me.id) : "";
+  const isMeFirstSuperAdmin = admins.some((a) => a._id === meId && a.is_first_super_admin);
+
   if (me && me.role !== "super_admin") {
     return (
       <div className="rounded border bg-white p-6 text-sm text-slate-600">
@@ -104,7 +155,7 @@ export default function AdminsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Admins</h1>
           <p className="text-sm text-slate-500">
@@ -113,57 +164,57 @@ export default function AdminsPage() {
         </div>
         <button
           onClick={loadAdmins}
-          className="text-sm bg-slate-900 text-white px-3 py-2 rounded hover:bg-slate-800 disabled:opacity-60"
+          className="rounded bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
           disabled={loading}
         >
           {loading ? "Loading..." : "Refresh"}
         </button>
       </div>
 
-      <div className="bg-white p-4 rounded shadow mb-4">
-        <h2 className="font-semibold mb-3">Create Admin</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="mb-4 rounded bg-white p-4 shadow">
+        <h2 className="mb-3 font-semibold">Create Admin</h2>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <input
             placeholder="Name"
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
-            className="border px-3 py-2 rounded"
+            className="rounded border px-3 py-2"
           />
           <input
             placeholder="Username (optional)"
             value={formUsername}
             onChange={(e) => setFormUsername(e.target.value)}
-            className="border px-3 py-2 rounded"
+            className="rounded border px-3 py-2"
           />
           <input
             placeholder="Email"
             value={formEmail}
             onChange={(e) => setFormEmail(e.target.value)}
-            className="border px-3 py-2 rounded"
+            className="rounded border px-3 py-2"
           />
           <input
             placeholder="Password"
             type="password"
             value={formPassword}
             onChange={(e) => setFormPassword(e.target.value)}
-            className="border px-3 py-2 rounded"
+            className="rounded border px-3 py-2"
           />
         </div>
         <div className="mt-3 flex gap-2">
           <button
             onClick={createAdmin}
             disabled={loading}
-            className="text-sm bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+            className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
           >
             Add Admin
           </button>
-          <button onClick={resetForm} className="text-sm px-3 py-2 rounded border hover:bg-slate-50">
+          <button onClick={resetForm} className="rounded border px-3 py-2 text-sm hover:bg-slate-50">
             Clear
           </button>
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded shadow">
+      <div className="rounded bg-white p-4 shadow">
         <table className="w-full text-left">
           <thead>
             <tr>
@@ -176,27 +227,125 @@ export default function AdminsPage() {
             </tr>
           </thead>
           <tbody>
-            {admins.map((u) => (
-              <tr key={u._id} className="border-t">
-                <td className="py-2">{u._id}</td>
-                <td className="py-2">{u.name}</td>
-                <td className="py-2">{u.username || "—"}</td>
-                <td className="py-2">{u.email}</td>
-                <td className="py-2">{u.role}</td>
-                <td className="py-2">
-                  <button
-                    className="text-sm text-red-700 hover:underline disabled:opacity-60"
-                    disabled={loading || u.role === "super_admin"}
-                    onClick={() => demoteToUser(u._id, u.role)}
-                  >
-                    Remove admin
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {admins.map((u) => {
+              const isSelf = u._id === meId;
+              const isTargetSuperAdmin = u.role === "super_admin";
+              const isTargetFirstSA = u.is_first_super_admin;
+
+              // Edit: first SA can edit anyone (except self row shows no action needed),
+              // other super admins can edit normal admins only
+              const canEdit = isMeFirstSuperAdmin
+                ? !isSelf // first SA can edit all others
+                : !isTargetSuperAdmin; // non-first SA can only edit normal admins
+
+              // Remove: first SA can remove anyone except themselves and the first SA entry,
+              // other super admins can only remove normal admins
+              let canRemove = false;
+              if (isSelf) {
+                canRemove = false; // never remove yourself
+              } else if (isTargetSuperAdmin) {
+                // only the first SA can remove other super admins (not the first SA itself)
+                canRemove = isMeFirstSuperAdmin && !isTargetFirstSA;
+              } else {
+                canRemove = true; // all super admins can remove normal admins
+              }
+
+              return (
+                <tr key={u._id} className="border-t">
+                  <td className="py-2">{u._id}</td>
+                  <td className="py-2">{u.name}</td>
+                  <td className="py-2">{u.username || "—"}</td>
+                  <td className="py-2">{u.email}</td>
+                  <td className="py-2">
+                    {u.role}
+                    {u.is_first_super_admin && <span className="ml-1 text-xs text-amber-600">(primary)</span>}
+                  </td>
+                  <td className="space-x-2 py-2">
+                    {canEdit && (
+                      <button
+                        className="text-sm text-blue-700 hover:underline disabled:opacity-60"
+                        disabled={loading}
+                        onClick={() => openEdit(u)}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canRemove && (
+                      <button
+                        className="text-sm text-red-700 hover:underline disabled:opacity-60"
+                        disabled={loading}
+                        onClick={() => demoteToUser(u._id, u.role)}
+                      >
+                        Remove admin
+                      </button>
+                    )}
+                    {isSelf && <span className="text-xs text-slate-400 italic">You</span>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Edit Admin Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Admin</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="text-sm text-slate-600">Name</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Name"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Username</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                placeholder="Username"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Email</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="Email"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">New Password (leave empty to keep)</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                type="password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={submitEdit}
+                className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                Save Changes
+              </button>
+              <button onClick={() => setEditOpen(false)} className="rounded border px-4 py-2 text-sm hover:bg-slate-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

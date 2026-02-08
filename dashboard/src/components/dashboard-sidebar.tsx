@@ -28,6 +28,7 @@ export default function DashboardSidebar() {
   const links = useMemo(() => {
     const baseLinks = [
       { href: "/dashboard", label: "نظرة عامة" },
+      { href: "/dashboard/profile", label: "الملف الشخصي" },
       { href: "/dashboard/verifications", label: "التحققات" },
       { href: "/dashboard/users", label: "المستخدمون" },
       { href: "/dashboard/document-types", label: "أنواع الوثائق" },
@@ -36,7 +37,7 @@ export default function DashboardSidebar() {
       { href: "/dashboard/blockchain", label: "البلوكتشين" },
     ];
     if (me?.role === "super_admin") {
-      baseLinks.splice(2, 0, { href: "/dashboard/admins", label: "Admins" });
+      baseLinks.splice(3, 0, { href: "/dashboard/admins", label: "Admins" });
     }
     return baseLinks;
   }, [me?.role]);
