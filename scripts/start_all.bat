@@ -31,11 +31,12 @@ start "Watheq - IPFS" cmd /k "%~dp0start_ipfs.bat"
 REM Wait a bit for IPFS to start
 timeout /t 3 /nobreak >nul
 
-REM Start MultiChain in Docker (blocks until RPC ready)
+REM Start MultiChain in a new window (Docker)
 echo [2/5] Starting MultiChain Blockchain...
-call "%~dp0start_multichain.bat"
+start "Watheq - MultiChain" cmd /k "%~dp0start_multichain.bat"
 
-timeout /t 1 /nobreak >nul
+REM Wait a bit for MultiChain RPC to become ready
+timeout /t 5 /nobreak >nul
 
 REM Start Backend API in a new window
 echo [3/5] Starting Backend API...
