@@ -47,6 +47,31 @@ def _preprocess_for_classifier(image: np.ndarray) -> np.ndarray:
     return image
 
 
+# ── Module-level Dataset (picklable on Windows for num_workers > 0) ──────────
+
+class _ElementDataset:
+    """Simple dataset for genuine/forged element images."""
+
+    def __init__(self, items: list):
+        self.items = items
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        import torch
+
+        path, label = self.items[idx]
+        img = cv2.imdecode(
+            np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_COLOR
+        )
+        if img is None:
+            img = np.zeros((INPUT_SIZE[0], INPUT_SIZE[1], 3), dtype=np.uint8)
+        proc = _preprocess_for_classifier(img)
+        tensor = torch.from_numpy(proc).permute(2, 0, 1)  # (C, H, W)
+        return tensor, torch.tensor([float(label)], dtype=torch.float32)
+
+
 class ElementClassifier:
     """
     Binary classifier: genuine (1.0) vs forged (0.0) for a single element type.
@@ -96,7 +121,7 @@ class ElementClassifier:
                         nn.ReLU(),
                         nn.Dropout(0.2),
                         nn.Linear(256, 1),
-                        nn.Sigmoid(),
+                        # No Sigmoid here — use BCEWithLogitsLoss for AMP safety
                     )
 
                 def forward(self, x):
@@ -156,7 +181,7 @@ class ElementClassifier:
 
         with torch.no_grad():
             output = self.model(tensor)
-        return float(output.item())
+        return float(torch.sigmoid(output).item())
 
     def train_from_dirs(
         self,
@@ -187,7 +212,7 @@ class ElementClassifier:
         """
         import torch
         import torch.nn as nn
-        from torch.utils.data import DataLoader, Dataset, random_split
+        from torch.utils.data import DataLoader, random_split
 
         # Build fresh model with pretrained backbone
         self._build_attempted = False
@@ -219,26 +244,6 @@ class ElementClassifier:
             f"{sum(1 for _, l in image_paths if l == 0)} forged)"
         )
 
-        # Dataset class
-        class _ElementDataset(Dataset):
-            def __init__(self, items):
-                self.items = items
-
-            def __len__(self):
-                return len(self.items)
-
-            def __getitem__(self, idx):
-                path, label = self.items[idx]
-                img = cv2.imdecode(
-                    np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_COLOR
-                )
-                if img is None:
-                    # Return a black image as fallback
-                    img = np.zeros((INPUT_SIZE[0], INPUT_SIZE[1], 3), dtype=np.uint8)
-                proc = _preprocess_for_classifier(img)
-                tensor = torch.from_numpy(proc).permute(2, 0, 1)  # (C, H, W)
-                return tensor, torch.tensor([float(label)], dtype=torch.float32)
-
         dataset = _ElementDataset(image_paths)
         val_size = max(1, int(len(dataset) * val_split))
         train_size = len(dataset) - val_size
@@ -246,19 +251,34 @@ class ElementClassifier:
 
         use_cuda = self.device != "cpu"
 
+        # GPU: bigger batch + parallel loading; CPU: conservative
+        if use_cuda:
+            batch_size = max(batch_size, 64)  # 4GB VRAM handles 64 easily
+            num_workers = 4
+            torch.backends.cudnn.benchmark = True  # optimize kernels for fixed input size
+        else:
+            num_workers = 0
+
+        logger.info(
+            f"  Device: {self.device.upper()} | batch_size={batch_size} | "
+            f"num_workers={num_workers} | AMP={'on' if use_cuda else 'off'}"
+        )
+
         train_loader = DataLoader(
             train_ds,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=2 if use_cuda else 0,
+            num_workers=num_workers,
             pin_memory=use_cuda,
+            persistent_workers=num_workers > 0,
         )
         val_loader = DataLoader(
             val_ds,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=2 if use_cuda else 0,
+            num_workers=num_workers,
             pin_memory=use_cuda,
+            persistent_workers=num_workers > 0,
         )
 
         # Freeze backbone initially, train head only for first 3 epochs
@@ -267,7 +287,7 @@ class ElementClassifier:
         for param in self.model.head.parameters():
             param.requires_grad = True
 
-        criterion = nn.BCELoss()
+        criterion = nn.BCEWithLogitsLoss()  # AMP-safe, includes sigmoid internally
         optimizer = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, self.model.parameters()), lr=lr
         )
@@ -280,6 +300,10 @@ class ElementClassifier:
         best_val_acc = 0.0
         epochs_no_improve = 0
         history = []
+
+        # Mixed precision for GPU — ~2x throughput with float16
+        use_amp = use_cuda
+        scaler = torch.amp.GradScaler(enabled=use_amp)
 
         for epoch in range(epochs):
             # Unfreeze backbone after epoch 2 (earlier fine-tuning for deep training)
@@ -299,17 +323,20 @@ class ElementClassifier:
             train_total = 0
 
             for images, labels in train_loader:
-                images = images.to(self.device)
-                labels = labels.to(self.device)
+                images = images.to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
 
-                optimizer.zero_grad()
-                outputs = self.model(images)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+                with torch.amp.autocast(device_type=self.device, enabled=use_amp):
+                    outputs = self.model(images)
+                    loss = criterion(outputs, labels)
+
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
 
                 train_loss += loss.item() * images.size(0)
-                preds = (outputs >= 0.5).float()
+                preds = (outputs >= 0.0).float()  # logits: >=0 means probability >=0.5
                 train_correct += (preds == labels).sum().item()
                 train_total += labels.size(0)
 
@@ -324,12 +351,13 @@ class ElementClassifier:
 
             with torch.no_grad():
                 for images, labels in val_loader:
-                    images = images.to(self.device)
-                    labels = labels.to(self.device)
-                    outputs = self.model(images)
-                    loss = criterion(outputs, labels)
+                    images = images.to(self.device, non_blocking=True)
+                    labels = labels.to(self.device, non_blocking=True)
+                    with torch.amp.autocast(device_type=self.device, enabled=use_amp):
+                        outputs = self.model(images)
+                        loss = criterion(outputs, labels)
                     val_loss += loss.item() * images.size(0)
-                    preds = (outputs >= 0.5).float()
+                    preds = (outputs >= 0.0).float()  # logits threshold
                     val_correct += (preds == labels).sum().item()
                     val_total += labels.size(0)
 
