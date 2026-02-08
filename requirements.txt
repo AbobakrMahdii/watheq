@@ -18,10 +18,9 @@ passlib[bcrypt]>=1.7.4
 databases>=0.9.0
 aiomysql>=0.2.0
 
-# ── AI / Deep Learning ─────────────────────────────────────────────────────
+# ── AI / Deep Learning (v3 — ElementClassifier + FontAnalyzer) ─────────────
 torch>=2.0.0
-torchvision>=0.15.0
-ultralytics>=8.0.0               # YOLOv8 document element detection
+torchvision>=0.15.0              # EfficientNet-B0 backbone for ElementClassifier
 numpy>=1.24.0
 opencv-python>=4.5.0             # imported as cv2
 Pillow>=9.0.0
@@ -59,3 +58,7 @@ tqdm>=4.64.0
 #   - Google Cloud credentials JSON (for Vision OCR)
 #   - MultiChain daemon (multichaind) running locally
 #   - IPFS daemon (kubo) running locally
+#
+# NOTE: ultralytics (YOLOv8) was removed in AI v3.
+#   Element detection now uses layout_config.yaml ROIs.
+#   Verification uses trained ElementClassifier + FontAnalyzer.
