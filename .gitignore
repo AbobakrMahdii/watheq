@@ -1,9 +1,9 @@
 .venv
 .env
 api/.env
-ai/data/training
-ai/models/embeddings
-ai/models/weights
+ai/data/training/**/out_genuine/
+ai/data/training/**/out_forged/
+ai/data/training/**/*.txt
 storage/*
 *.pyc
 __pycache__/

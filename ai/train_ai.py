@@ -413,8 +413,25 @@ def train_doc_type(
         elem_type = elem["type"]
 
         if elem_type == "visual" and elem.get("ref_file"):
-            # Step 1: Generate augmented data
+            # Check if trained weight already exists → skip entirely
+            pt_path = WEIGHTS_DIR / f"{doc_type}_{class_name}.pt"
+            if pt_path.exists() and not force:
+                logger.info(
+                    f"\n  [{ref_stem} → {class_name}] ✓ Weight exists — skipped"
+                )
+                classifier_results[class_name] = {
+                    "status": "skipped",
+                    "message": f"{pt_path.name} already exists",
+                    "class_name": class_name,
+                    "ref_stem": ref_stem,
+                    "weight_path": str(pt_path),
+                }
+                continue
+
+            # Weight missing → ensure augmented data exists, then train
             logger.info(f"\n  [{ref_stem} → {class_name}] Visual element")
+
+            # Step 1: Generate augmented data (skips if already present)
             aug_result = generate_augmented_data(
                 doc_type, ref_stem, elem["ref_file"], force=force
             )
@@ -493,8 +510,27 @@ def train_doc_type(
     }
 
 
+def _all_weights_exist(doc_type: str) -> bool:
+    """Return True if every visual element already has a trained .pt file."""
+    config = load_layout_config(doc_type)
+    if config is None:
+        return False
+    elements = get_elements_from_config(config)
+    for elem in elements:
+        if elem["type"] == "visual" and elem.get("ref_file"):
+            pt_path = WEIGHTS_DIR / f"{doc_type}_{elem['class_name']}.pt"
+            if not pt_path.exists():
+                return False
+    return True
+
+
 def train_all(force: bool = False) -> List[Dict]:
-    """Train all discovered document types."""
+    """Train all discovered document types.
+
+    Skip logic (when force=False):
+      – If ALL .pt weight files already exist for a doc type → skip entirely.
+      – Otherwise, train only the missing elements (see train_doc_type).
+    """
     doc_types = discover_doc_types()
     if not doc_types:
         logger.warning("No document types found with layout_config.yaml")
@@ -502,15 +538,16 @@ def train_all(force: bool = False) -> List[Dict]:
 
     results = []
     for doc_type in doc_types:
-        existing = load_training_config(doc_type)
-        if existing and not force and existing.get("version") == "3.0":
-            logger.info(f"Skipping {doc_type} (already trained v3.0, use --force)")
+        if not force and _all_weights_exist(doc_type):
+            logger.info(
+                f"Skipping {doc_type} (all classifier weights already exist, "
+                f"use --force to retrain)"
+            )
             results.append(
                 {
                     "status": "skipped",
                     "doc_type": doc_type,
-                    "message": "Already trained v3.0",
-                    "trained_at": existing.get("trained_at"),
+                    "message": "All .pt weights present — nothing to train",
                 }
             )
             continue
