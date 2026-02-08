@@ -79,9 +79,13 @@ class ElementClassifier:
                             efficientnet_b0,
                             EfficientNet_B0_Weights,
                         )
-                        backbone = efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
+
+                        backbone = efficientnet_b0(
+                            weights=EfficientNet_B0_Weights.IMAGENET1K_V1
+                        )
                     except (ImportError, TypeError):
                         from torchvision.models import efficientnet_b0
+
                         backbone = efficientnet_b0(pretrained=True)
 
                     # Use all layers except the final classifier
@@ -90,7 +94,7 @@ class ElementClassifier:
                     self.head = nn.Sequential(
                         nn.Linear(1280, 256),
                         nn.ReLU(),
-                        nn.Dropout(0.3),
+                        nn.Dropout(0.2),
                         nn.Linear(256, 1),
                         nn.Sigmoid(),
                     )
@@ -206,9 +210,11 @@ class ElementClassifier:
                 "message": f"Not enough training data: {len(image_paths)} images",
             }
 
-        logger.info(f"  Training dataset: {len(image_paths)} images "
-                     f"({sum(1 for _, l in image_paths if l == 1)} genuine, "
-                     f"{sum(1 for _, l in image_paths if l == 0)} forged)")
+        logger.info(
+            f"  Training dataset: {len(image_paths)} images "
+            f"({sum(1 for _, l in image_paths if l == 1)} genuine, "
+            f"{sum(1 for _, l in image_paths if l == 0)} forged)"
+        )
 
         # Dataset class
         class _ElementDataset(Dataset):
@@ -235,10 +241,20 @@ class ElementClassifier:
         train_size = len(dataset) - val_size
         train_ds, val_ds = random_split(dataset, [train_size, val_size])
 
-        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                                  num_workers=0, pin_memory=False)
-        val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                                num_workers=0, pin_memory=False)
+        train_loader = DataLoader(
+            train_ds,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=False,
+        )
+        val_loader = DataLoader(
+            val_ds,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=False,
+        )
 
         # Freeze backbone initially, train head only for first 3 epochs
         for param in self.model.features.parameters():
@@ -261,8 +277,8 @@ class ElementClassifier:
         history = []
 
         for epoch in range(epochs):
-            # Unfreeze backbone after epoch 3 (fine-tune everything)
-            if epoch == 3:
+            # Unfreeze backbone after epoch 2 (earlier fine-tuning for deep training)
+            if epoch == 2:
                 for param in self.model.features.parameters():
                     param.requires_grad = True
                 optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr * 0.1)
@@ -344,8 +360,10 @@ class ElementClassifier:
             else:
                 epochs_no_improve += 1
                 if epochs_no_improve >= patience:
-                    logger.info(f"  Early stopping at epoch {epoch+1} "
-                                f"(no improvement for {patience} epochs)")
+                    logger.info(
+                        f"  Early stopping at epoch {epoch+1} "
+                        f"(no improvement for {patience} epochs)"
+                    )
                     break
 
         # Reload best weights

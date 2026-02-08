@@ -133,7 +133,7 @@ def _detect_elements(
         detections.append({
             "class_name": elem["class_name"],
             "ref_stem": elem["ref_stem"],
-            "confidence": 0.85,  # Template-based confidence
+            "confidence": 0.95,  # Template-based confidence
             "bbox": [px, py, pw, ph],
             "bbox_norm": [round(rx, 4), round(ry, 4), round(rw, 4), round(rh, 4)],
             "elem_type": elem["type"],
@@ -306,8 +306,8 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
         }
 
     thresholds = layout_config.get("thresholds", {})
-    pass_score = thresholds.get("pass_score", 0.85)
-    suspicious_score = thresholds.get("suspicious_score", 0.60)
+    pass_score = thresholds.get("pass_score", 0.95)
+    suspicious_score = thresholds.get("suspicious_score", 0.70)
 
     # Get all elements from config
     all_elements = _get_all_elements(layout_config)

@@ -56,6 +56,7 @@ sys.path.insert(0, str(AI_DIR.parent))
 
 # ───────────────────────── Layout Config ─────────────────────────
 
+
 def load_layout_config(doc_type: str) -> Optional[Dict[str, Any]]:
     """Load layout_config.yaml for a document type."""
     config_path = REFERENCES_DIR / doc_type / "layout_config.yaml"
@@ -70,40 +71,48 @@ def get_elements_from_config(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Extract all element definitions from layout config (visual + text)."""
     elements = []
     for ref_stem, elem_data in config.get("elements", {}).items():
-        elements.append({
-            "ref_stem": ref_stem,
-            "class_name": elem_data["class_name"],
-            "ref_file": elem_data.get("ref_file"),
-            "roi": elem_data.get("roi", {}),
-            "tolerance": elem_data.get("tolerance", 0.10),
-            "weight": elem_data.get("weight", 1.0),
-            "critical": elem_data.get("critical", False),
-            "type": elem_data.get("type", "visual"),
-        })
+        elements.append(
+            {
+                "ref_stem": ref_stem,
+                "class_name": elem_data["class_name"],
+                "ref_file": elem_data.get("ref_file"),
+                "roi": elem_data.get("roi", {}),
+                "tolerance": elem_data.get("tolerance", 0.10),
+                "weight": elem_data.get("weight", 1.0),
+                "critical": elem_data.get("critical", False),
+                "type": elem_data.get("type", "visual"),
+            }
+        )
     for text_name, text_data in config.get("text_regions", {}).items():
-        elements.append({
-            "ref_stem": text_name,
-            "class_name": text_data["class_name"],
-            "ref_file": None,
-            "roi": text_data.get("roi", {}),
-            "tolerance": text_data.get("tolerance", 0.12),
-            "weight": text_data.get("weight", 1.0),
-            "critical": text_data.get("critical", False),
-            "type": "text",
-        })
+        elements.append(
+            {
+                "ref_stem": text_name,
+                "class_name": text_data["class_name"],
+                "ref_file": None,
+                "roi": text_data.get("roi", {}),
+                "tolerance": text_data.get("tolerance", 0.12),
+                "weight": text_data.get("weight", 1.0),
+                "critical": text_data.get("critical", False),
+                "type": "text",
+            }
+        )
     return elements
 
 
 # ───────────────────────── Discovery ─────────────────────────
 
+
 def discover_doc_types() -> List[str]:
     """Discover all document types from reference images directory."""
     if not REFERENCES_DIR.exists():
         return []
-    return sorted([
-        item.name for item in REFERENCES_DIR.iterdir()
-        if item.is_dir() and (item / "layout_config.yaml").exists()
-    ])
+    return sorted(
+        [
+            item.name
+            for item in REFERENCES_DIR.iterdir()
+            if item.is_dir() and (item / "layout_config.yaml").exists()
+        ]
+    )
 
 
 def get_reference_path(doc_type: str, ref_file: str) -> Optional[Path]:
@@ -122,6 +131,7 @@ def get_reference_path(doc_type: str, ref_file: str) -> Optional[Path]:
 
 
 # ───────────────────────── Training Config ─────────────────────────
+
 
 def load_training_config(doc_type: str) -> Optional[Dict[str, Any]]:
     """Load existing training config for a document type."""
@@ -142,6 +152,7 @@ def save_training_config(doc_type: str, config: Dict[str, Any]) -> None:
 
 # ───────────────────────── Data Generation ─────────────────────────
 
+
 def generate_augmented_data(
     doc_type: str, ref_stem: str, ref_file: str, force: bool = False
 ) -> Dict[str, Any]:
@@ -157,8 +168,16 @@ def generate_augmented_data(
     output_dir = TRAINING_DIR / doc_type / ref_stem
     if output_dir.exists() and (output_dir / "genuine.txt").exists() and not force:
         # Count existing files
-        gen_count = len(list((output_dir / "out_genuine").glob("*.png"))) if (output_dir / "out_genuine").exists() else 0
-        forg_count = len(list((output_dir / "out_forged").glob("*.png"))) if (output_dir / "out_forged").exists() else 0
+        gen_count = (
+            len(list((output_dir / "out_genuine").glob("*.png")))
+            if (output_dir / "out_genuine").exists()
+            else 0
+        )
+        forg_count = (
+            len(list((output_dir / "out_forged").glob("*.png")))
+            if (output_dir / "out_forged").exists()
+            else 0
+        )
         return {
             "status": "skipped",
             "message": f"Data exists ({gen_count}g + {forg_count}f). Use --force to regenerate.",
@@ -185,6 +204,7 @@ def generate_augmented_data(
 
 
 # ───────────────────────── Classifier Training ─────────────────────────
+
 
 def train_element_classifier(
     doc_type: str, ref_stem: str, class_name: str, layout_config: Dict
@@ -234,6 +254,7 @@ def train_element_classifier(
 
 
 # ───────────────────────── Font Profile Learning ─────────────────────────
+
 
 def learn_text_font_profile(
     doc_type: str, class_name: str, roi: Dict[str, float]
@@ -306,6 +327,7 @@ def learn_text_font_profile(
 
 # ───────────────────────── Main Training Orchestrator ─────────────────────────
 
+
 def train_doc_type(
     doc_type: str,
     specific_element: Optional[str] = None,
@@ -339,7 +361,11 @@ def train_doc_type(
         }
 
     if specific_element:
-        elements = [e for e in elements if e["ref_stem"] == specific_element or e["class_name"] == specific_element]
+        elements = [
+            e
+            for e in elements
+            if e["ref_stem"] == specific_element or e["class_name"] == specific_element
+        ]
         if not elements:
             all_names = [e["ref_stem"] for e in get_elements_from_config(layout_config)]
             return {
@@ -368,7 +394,9 @@ def train_doc_type(
                 doc_type, ref_stem, elem["ref_file"], force=force
             )
             augmentation_results[ref_stem] = aug_result
-            logger.info(f"    Data: {aug_result['status']} — {aug_result.get('message', 'OK')}")
+            logger.info(
+                f"    Data: {aug_result['status']} — {aug_result.get('message', 'OK')}"
+            )
 
             # Step 2: Train binary classifier
             cls_result = train_element_classifier(
@@ -379,9 +407,7 @@ def train_doc_type(
         elif elem_type == "text":
             # Step 3: Learn font profile from the full reference document
             logger.info(f"\n  [{class_name}] Text region — learning font profile")
-            font_result = learn_text_font_profile(
-                doc_type, class_name, elem["roi"]
-            )
+            font_result = learn_text_font_profile(doc_type, class_name, elem["roi"])
             font_results[class_name] = font_result
             logger.info(f"    Font: {font_result['status']}")
 
@@ -404,8 +430,10 @@ def train_doc_type(
         "trained_at": datetime.now().isoformat(),
         "layout": learned_layout,
         "thresholds": {
-            "pass_score": layout_config.get("thresholds", {}).get("pass_score", 0.85),
-            "suspicious_score": layout_config.get("thresholds", {}).get("suspicious_score", 0.60),
+            "pass_score": layout_config.get("thresholds", {}).get("pass_score", 0.95),
+            "suspicious_score": layout_config.get("thresholds", {}).get(
+                "suspicious_score", 0.70
+            ),
         },
         "augmentation_results": augmentation_results,
         "classifier_results": {
@@ -417,12 +445,16 @@ def train_doc_type(
     save_training_config(doc_type, config)
 
     # Summary
-    cls_success = sum(1 for r in classifier_results.values() if r.get("status") == "success")
+    cls_success = sum(
+        1 for r in classifier_results.values() if r.get("status") == "success"
+    )
     font_success = sum(1 for r in font_results.values() if r.get("status") == "success")
     total = len(elements)
 
     logger.info(f"\n{'─'*60}")
-    logger.info(f"  {doc_type}: {cls_success} classifiers trained, {font_success} font profiles learned")
+    logger.info(
+        f"  {doc_type}: {cls_success} classifiers trained, {font_success} font profiles learned"
+    )
     logger.info(f"{'─'*60}")
 
     return {
@@ -448,12 +480,14 @@ def train_all(force: bool = False) -> List[Dict]:
         existing = load_training_config(doc_type)
         if existing and not force and existing.get("version") == "3.0":
             logger.info(f"Skipping {doc_type} (already trained v3.0, use --force)")
-            results.append({
-                "status": "skipped",
-                "doc_type": doc_type,
-                "message": "Already trained v3.0",
-                "trained_at": existing.get("trained_at"),
-            })
+            results.append(
+                {
+                    "status": "skipped",
+                    "doc_type": doc_type,
+                    "message": "Already trained v3.0",
+                    "trained_at": existing.get("trained_at"),
+                }
+            )
             continue
 
         result = train_doc_type(doc_type, force=force)
@@ -464,12 +498,17 @@ def train_all(force: bool = False) -> List[Dict]:
 
 # ───────────────────────── CLI ─────────────────────────
 
+
 def list_doc_types():
     """List all document types, elements, and training status."""
     doc_types = discover_doc_types()
     if not doc_types:
         # Also check for dirs without config
-        all_dirs = [d.name for d in REFERENCES_DIR.iterdir() if d.is_dir()] if REFERENCES_DIR.exists() else []
+        all_dirs = (
+            [d.name for d in REFERENCES_DIR.iterdir() if d.is_dir()]
+            if REFERENCES_DIR.exists()
+            else []
+        )
         if all_dirs:
             print(f"\nDocument type folders found: {all_dirs}")
             print("But none have layout_config.yaml. Create one to enable training.")
@@ -498,7 +537,9 @@ def list_doc_types():
 
                 if elem_type == "visual":
                     status = "✓" if weight_path.exists() else "✗"
-                    print(f"      {status} {elem['ref_stem']} → {class_name} [classifier]")
+                    print(
+                        f"      {status} {elem['ref_stem']} → {class_name} [classifier]"
+                    )
                 else:
                     status = "✓" if font_path.exists() else "✗"
                     print(f"      {status} {class_name} [font profile]")
