@@ -2,7 +2,8 @@
 .env
 api/.env
 ai/data/training
-ai/models
+ai/models/embeddings
+ai/models/weights
 storage/*
 *.pyc
 __pycache__/
