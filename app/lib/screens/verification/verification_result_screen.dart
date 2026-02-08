@@ -491,16 +491,78 @@ class _ResultView extends StatelessWidget {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 10),
+                  // Fraud alert
+                  if (result.dataVerificationResult['fraud_suspected'] == true)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withOpacity(0.1),
+                        border: Border.all(color: AppColors.danger),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: AppColors.danger,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'محاولة احتيال — بيانات الوثيقة لا تطابق السجل المحفوظ',
+                              style: TextStyle(
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // New record info
+                  if (result.dataVerificationResult['new_record_created'] ==
+                      true)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.person_add, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'سجل مواطن جديد — تم حفظ البيانات المستخرجة لأول مرة',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Row(
                     children: [
                       Icon(
                         result.dataVerificationResult['citizen_found'] == true
                             ? Icons.person_search
+                            : result.dataVerificationResult['new_record_created'] ==
+                                  true
+                            ? Icons.person_add
                             : Icons.person_off,
                         color:
                             result.dataVerificationResult['citizen_found'] ==
                                 true
                             ? AppColors.success
+                            : result.dataVerificationResult['new_record_created'] ==
+                                  true
+                            ? Colors.blue
                             : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 8),

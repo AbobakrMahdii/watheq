@@ -39,10 +39,12 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
       _error = null;
     });
     try {
-      final record = await VerificationOrchestratorService.instance
-          .getStatus(widget.verificationId);
-      final steps = await VerificationOrchestratorService.instance
-          .getSteps(widget.verificationId);
+      final record = await VerificationOrchestratorService.instance.getStatus(
+        widget.verificationId,
+      );
+      final steps = await VerificationOrchestratorService.instance.getSteps(
+        widget.verificationId,
+      );
       if (!mounted) return;
       setState(() {
         _record = record;
@@ -134,20 +136,20 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!, textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: _load,
-                        child: const Text('إعادة المحاولة'),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: _load,
+                    child: const Text('إعادة المحاولة'),
                   ),
-                )
-              : _buildContent(),
+                ],
+              ),
+            )
+          : _buildContent(),
     );
   }
 
@@ -233,8 +235,7 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
         const SizedBox(height: 12),
 
         // ── Face matching ──
-        if (data.containsKey('FACE_MATCHING') ||
-            data.containsKey('BIOMETRIC'))
+        if (data.containsKey('FACE_MATCHING') || data.containsKey('BIOMETRIC'))
           _buildFaceCard(data),
 
         // ── AI Verification ──
@@ -265,18 +266,18 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
             step.status == VerificationStatus.success
                 ? Icons.check_circle
                 : step.status == VerificationStatus.failed
-                    ? Icons.error
-                    : isActive
-                        ? Icons.timelapse
-                        : stageIcon(step.stage),
+                ? Icons.error
+                : isActive
+                ? Icons.timelapse
+                : stageIcon(step.stage),
             size: 20,
             color: step.status == VerificationStatus.success
                 ? AppColors.success
                 : step.status == VerificationStatus.failed
-                    ? AppColors.danger
-                    : isActive
-                        ? AppColors.primary
-                        : AppColors.textSecondary,
+                ? AppColors.danger
+                : isActive
+                ? AppColors.primary
+                : AppColors.textSecondary,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -293,8 +294,8 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
               color: step.status == VerificationStatus.success
                   ? AppColors.success
                   : step.status == VerificationStatus.failed
-                      ? AppColors.danger
-                      : AppColors.textSecondary,
+                  ? AppColors.danger
+                  : AppColors.textSecondary,
               fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
@@ -303,8 +304,11 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
             const SizedBox(width: 4),
             Tooltip(
               message: step.errorMessage!,
-              child: const Icon(Icons.info_outline,
-                  size: 14, color: AppColors.danger),
+              child: const Icon(
+                Icons.info_outline,
+                size: 14,
+                color: AppColors.danger,
+              ),
             ),
           ],
         ],
@@ -315,8 +319,8 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
   Widget _buildFaceCard(Map<String, dynamic> data) {
     final faceData =
         (data['FACE_MATCHING'] as Map?)?.cast<String, dynamic>() ??
-            (data['BIOMETRIC'] as Map?)?.cast<String, dynamic>() ??
-            {};
+        (data['BIOMETRIC'] as Map?)?.cast<String, dynamic>() ??
+        {};
     final similarity =
         ((faceData['similarity_percent'] ?? faceData['score'] ?? 0) as num)
             .toDouble();
@@ -330,9 +334,10 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('نتيجة التطابق',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text(
+                  'نتيجة التطابق',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -353,7 +358,9 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
                     Text(
                       '${similarity.toStringAsFixed(1)}%',
                       style: const TextStyle(
-                          fontWeight: FontWeight.w900, fontSize: 16),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
                     ),
                   ],
                 ),
@@ -371,8 +378,7 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
     final decision = ai['final_decision'] as String?;
     final percent = ai['authenticity_percent'];
     final percentValue = percent is num ? percent.toDouble() : null;
-    final elements =
-        (ai['elements'] as Map?)?.cast<String, dynamic>() ?? {};
+    final elements = (ai['elements'] as Map?)?.cast<String, dynamic>() ?? {};
 
     return Column(
       children: [
@@ -382,9 +388,10 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('أصالة الوثيقة',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text(
+                  'أصالة الوثيقة',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 10),
                 if (percentValue != null || (decision ?? '').isNotEmpty)
                   Row(
@@ -399,46 +406,55 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text([
-                          if ((decision ?? '').isNotEmpty)
-                            'القرار: $decision',
-                          if (percentValue != null)
-                            'النسبة: ${percentValue.toStringAsFixed(1)}%',
-                        ].join(' • ')),
+                        child: Text(
+                          [
+                            if ((decision ?? '').isNotEmpty)
+                              'القرار: $decision',
+                            if (percentValue != null)
+                              'النسبة: ${percentValue.toStringAsFixed(1)}%',
+                          ].join(' • '),
+                        ),
                       ),
                     ],
                   ),
                 if (elements.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   const Divider(),
-                  const Text('تفاصيل العناصر',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary)),
+                  const Text(
+                    'تفاصيل العناصر',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   ...elements.entries.map((entry) {
-                    final eData =
-                        entry.value is Map ? entry.value as Map : {};
+                    final eData = entry.value is Map ? entry.value as Map : {};
                     final conf = eData['confidence'];
                     final status = eData['status']?.toString() ?? '';
-                    final confText =
-                        conf is num ? '${(conf * 100).toStringAsFixed(0)}%' : '';
-                    final isOk = status.toUpperCase() == 'OK' ||
+                    final confText = conf is num
+                        ? '${(conf * 100).toStringAsFixed(0)}%'
+                        : '';
+                    final isOk =
+                        status.toUpperCase() == 'OK' ||
                         status.toUpperCase() == 'PASS';
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          Icon(isOk ? Icons.check : Icons.warning_amber,
-                              size: 16,
-                              color: isOk
-                                  ? AppColors.success
-                                  : AppColors.textSecondary),
+                          Icon(
+                            isOk ? Icons.check : Icons.warning_amber,
+                            size: 16,
+                            color: isOk
+                                ? AppColors.success
+                                : AppColors.textSecondary,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(child: Text(entry.key)),
-                          Text(confText,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700)),
+                          Text(
+                            confText,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
                         ],
                       ),
                     );
@@ -466,18 +482,78 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('مطابقة البيانات',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text(
+                  'مطابقة البيانات',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 10),
+                // Fraud alert
+                if (dv['fraud_suspected'] == true)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withOpacity(0.1),
+                      border: Border.all(color: AppColors.danger),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: AppColors.danger,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'محاولة احتيال — بيانات الوثيقة لا تطابق السجل المحفوظ',
+                            style: TextStyle(
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                // New record info
+                if (dv['new_record_created'] == true)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      border: Border.all(color: Colors.blue),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.person_add, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'سجل مواطن جديد — تم حفظ البيانات المستخرجة لأول مرة',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Row(
                   children: [
                     Icon(
                       dv['citizen_found'] == true
                           ? Icons.person_search
+                          : dv['new_record_created'] == true
+                          ? Icons.person_add
                           : Icons.person_off,
                       color: dv['citizen_found'] == true
                           ? AppColors.success
+                          : dv['new_record_created'] == true
+                          ? Colors.blue
                           : AppColors.textSecondary,
                     ),
                     const SizedBox(width: 8),
@@ -499,11 +575,13 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
                         children: [
-                          Icon(matched ? Icons.check : Icons.close,
-                              size: 16,
-                              color: matched
-                                  ? AppColors.success
-                                  : AppColors.danger),
+                          Icon(
+                            matched ? Icons.check : Icons.close,
+                            size: 16,
+                            color: matched
+                                ? AppColors.success
+                                : AppColors.danger,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(child: Text(e.key.toString())),
                         ],
@@ -530,9 +608,10 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('تسجيل البلوكتشين',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text(
+                  'تسجيل البلوكتشين',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 10),
                 _kv('DocId', bc['doc_id']?.toString() ?? '—'),
                 _kv('CID', bc['cid']?.toString() ?? '—'),
@@ -554,8 +633,10 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('بيانات OCR',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const Text(
+              'بيانات OCR',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 10),
             Text(
               ocr.isEmpty
@@ -577,15 +658,16 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(k,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textSecondary)),
+            child: Text(
+              k,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(v, style: const TextStyle(fontSize: 12)),
-          ),
+          Expanded(child: Text(v, style: const TextStyle(fontSize: 12))),
         ],
       ),
     );
