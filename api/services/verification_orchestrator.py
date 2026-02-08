@@ -6,7 +6,7 @@ Executes the 8-stage sequential verification pipeline:
   3. DOCUMENT_FACE_EXTRACTION — استخراج وجه البطاقة
   4. FACE_MATCHING — مطابقة الوجه مع السيلفي
   5. OCR — قراءة النصوص (Google Vision)
-  6. AI_VERIFICATION — تحقق الذكاء الاصطناعي (YOLOv8 + Siamese)
+  6. AI_VERIFICATION — تحقق الذكاء الاصطناعي (ElementClassifier + FontAnalyzer v3)
   7. DATA_VERIFICATION — مطابقة البيانات مع سجلات المواطنين
   8. BLOCKCHAIN — تسجيل على MultiChain + IPFS
 
@@ -318,9 +318,16 @@ class VerificationOrchestrator:
                     if rectified_path is None:
                         raise RuntimeError("Rectified image not available")
                     src = rectified_path
+                    # Look up folder_name from document_types for AI verification
+                    dt_row = await _db.fetch_one(
+                        "SELECT folder_name FROM document_types WHERE id = :dtid",
+                        values={"dtid": payload.document_type_id},
+                    )
+                    doc_folder = dt_row["folder_name"] if dt_row else "identity"
                     result = await asyncio.to_thread(
                         ml_verify,
                         src,
+                        doc_folder,
                     )
                 elif stage == VerificationStage.DATA_VERIFICATION:
                     ocr_result = results.get(VerificationStage.OCR.value) or {}
