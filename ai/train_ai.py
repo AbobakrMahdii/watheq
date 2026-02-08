@@ -54,6 +54,20 @@ sys.path.insert(0, str(AI_DIR))
 sys.path.insert(0, str(AI_DIR.parent))
 
 
+def _detect_device() -> str:
+    """Auto-detect CUDA GPU if available."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            logger.info(f"GPU detected: {gpu_name} — using CUDA")
+            return "cuda"
+    except ImportError:
+        pass
+    logger.info("No CUDA GPU detected — using CPU (training will be slow)")
+    return "cpu"
+
+
 # ───────────────────────── Layout Config ─────────────────────────
 
 
@@ -225,9 +239,10 @@ def train_element_classifier(
     save_path = WEIGHTS_DIR / f"{doc_type}_{class_name}.pt"
     training_params = layout_config.get("training", {})
 
-    logger.info(f"  Training classifier for {class_name} (from {ref_stem})...")
+    device = _detect_device()
+    logger.info(f"  Training classifier for {class_name} (from {ref_stem}) on {device.upper()}...")
 
-    classifier = ElementClassifier()
+    classifier = ElementClassifier(device=device)
     result = classifier.train_from_dirs(
         genuine_dir=genuine_dir,
         forged_dir=forged_dir,

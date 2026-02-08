@@ -241,19 +241,21 @@ class ElementClassifier:
         train_size = len(dataset) - val_size
         train_ds, val_ds = random_split(dataset, [train_size, val_size])
 
+        use_cuda = self.device != "cpu"
+
         train_loader = DataLoader(
             train_ds,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0,
-            pin_memory=False,
+            num_workers=2 if use_cuda else 0,
+            pin_memory=use_cuda,
         )
         val_loader = DataLoader(
             val_ds,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0,
-            pin_memory=False,
+            num_workers=2 if use_cuda else 0,
+            pin_memory=use_cuda,
         )
 
         # Freeze backbone initially, train head only for first 3 epochs

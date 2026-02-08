@@ -9,7 +9,7 @@ cd /d "%~dp0.."
 
 REM Check AI models — train any untrained document types (v3 pipeline)
 echo [0/5] Checking AI models (v3 — ElementClassifier + FontAnalyzer)...
-python ai\train_ai.py --all 2>nul
+python ai\train_ai.py --all
 if errorlevel 0 (
     echo      AI models ready.
 ) else (
