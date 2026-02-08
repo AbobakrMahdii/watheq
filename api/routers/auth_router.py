@@ -8,7 +8,7 @@ from ..security import (
     verify_password,
     create_access_token,
     get_current_user,
-    get_current_admin
+    get_current_admin,
 )
 from api.services.audit_log_service import log_auth_event
 
@@ -24,15 +24,17 @@ async def register(user: UserCreate):
     if user.username and await users.find_one({"username": user.username}):
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    await users.insert_one({
-        "name": user.name,
-        "username": user.username,
-        "email": user.email,
-        "password": get_password_hash(user.password),
-        "role": "user",
-        "is_active": True,
-        "deleted_at": None,
-    })
+    await users.insert_one(
+        {
+            "name": user.name,
+            "username": user.username,
+            "email": user.email,
+            "password": get_password_hash(user.password),
+            "role": "user",
+            "is_active": True,
+            "deleted_at": None,
+        }
+    )
 
     return {"message": "registered successfully"}
 
@@ -61,7 +63,10 @@ async def login(request: Request):
         )
         raise HTTPException(
             status_code=400,
-            detail={"message": "Email and password are required", "code": "VALIDATION_ERROR"},
+            detail={
+                "message": "Email and password are required",
+                "code": "VALIDATION_ERROR",
+            },
         )
 
     if "@" in identifier:
@@ -72,7 +77,9 @@ async def login(request: Request):
 
     valid_password = False
     if user:
-        is_active = True if user.get("is_active") is None else bool(user.get("is_active"))
+        is_active = (
+            True if user.get("is_active") is None else bool(user.get("is_active"))
+        )
         if user.get("deleted_at") or not is_active:
             await log_auth_event(
                 request,
@@ -93,7 +100,9 @@ async def login(request: Request):
                 valid_password = True
                 try:
                     new_hash = get_password_hash(password)
-                    await users.update_one({"_id": user["_id"]}, {"$set": {"password": new_hash}})
+                    await users.update_one(
+                        {"_id": user["_id"]}, {"$set": {"password": new_hash}}
+                    )
                 except Exception:
                     pass
 
@@ -107,14 +116,19 @@ async def login(request: Request):
         )
         raise HTTPException(
             status_code=401,
-            detail={"message": "Invalid email or password", "code": "INVALID_CREDENTIALS"},
+            detail={
+                "message": "Invalid email or password",
+                "code": "INVALID_CREDENTIALS",
+            },
         )
 
-    token = create_access_token({
-        "sub": str(user["_id"]),
-        "email": user["email"],
-        "role": user.get("role", "user")
-    })
+    token = create_access_token(
+        {
+            "sub": str(user["_id"]),
+            "email": user["email"],
+            "role": user.get("role", "user"),
+        }
+    )
 
     await log_auth_event(
         request,
@@ -129,7 +143,7 @@ async def login(request: Request):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "role": user.get("role", "user")
+        "role": user.get("role", "user"),
     }
 
 
@@ -138,7 +152,11 @@ async def me(current_user=Depends(get_current_user)):
     users = get_user_collection()
     user_doc = None
     try:
-        user_id = int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None
+        user_id = (
+            int(current_user.get("sub"))
+            if str(current_user.get("sub")).isdigit()
+            else None
+        )
         if user_id is not None:
             user_doc = await users.find_one({"_id": user_id})
     except Exception:
@@ -184,9 +202,13 @@ async def admin_me(admin=Depends(get_current_admin)):
 
 
 @router.put("/change-password")
-async def change_password(body: ChangePasswordRequest, current_user=Depends(get_current_user)):
+async def change_password(
+    body: ChangePasswordRequest, current_user=Depends(get_current_user)
+):
     users = get_user_collection()
-    user_id = int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None
+    user_id = (
+        int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None
+    )
     if user_id is None:
         raise HTTPException(400, "Invalid user")
 
@@ -201,8 +223,7 @@ async def change_password(body: ChangePasswordRequest, current_user=Depends(get_
         raise HTTPException(400, "Current password is incorrect")
 
     await users.update_one(
-        {"_id": user_id},
-        {"$set": {"password": get_password_hash(body.new_password)}}
+        {"_id": user_id}, {"$set": {"password": get_password_hash(body.new_password)}}
     )
     return {"message": "Password changed successfully"}
 
@@ -213,7 +234,11 @@ async def logout(request: Request, current_user=Depends(get_current_user)):
         request,
         operation_type="Logout",
         status="success",
-        user_id=int(current_user.get("sub")) if str(current_user.get("sub")).isdigit() else None,
+        user_id=(
+            int(current_user.get("sub"))
+            if str(current_user.get("sub")).isdigit()
+            else None
+        ),
         user_email=current_user.get("email"),
         user_role=current_user.get("role"),
     )

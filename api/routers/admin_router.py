@@ -94,7 +94,9 @@ async def update_user(
         requester_id = str(admin.get("sub"))
         first_sa_id = await _get_first_super_admin_id()
         if requester_id != first_sa_id:
-            raise HTTPException(403, "Only the primary super admin can edit super admins")
+            raise HTTPException(
+                403, "Only the primary super admin can edit super admins"
+            )
 
     update_fields = {}
     if body.name is not None:
@@ -139,7 +141,7 @@ async def get_admins(super_admin=Depends(get_current_super_admin)):
     result = []
     async for u in users.find({"role": {"$in": ["admin", "super_admin"]}}):
         pub = to_public_user(u)
-        pub["is_first_super_admin"] = (pub["_id"] == first_sa_id)
+        pub["is_first_super_admin"] = pub["_id"] == first_sa_id
         result.append(pub)
     return result
 
@@ -194,7 +196,9 @@ async def remove_admin(user_id: str, super_admin=Depends(get_current_super_admin
         requester_id = str(super_admin.get("sub"))
         first_sa_id = await _get_first_super_admin_id()
         if requester_id != first_sa_id:
-            raise HTTPException(403, "Only the primary super admin can demote other super admins")
+            raise HTTPException(
+                403, "Only the primary super admin can demote other super admins"
+            )
         if str(user["_id"]) == first_sa_id:
             raise HTTPException(403, "Cannot demote the primary super admin")
 
