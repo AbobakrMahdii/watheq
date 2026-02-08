@@ -61,5 +61,4 @@ echo   - Backend API: http://localhost:8012
 echo   - API Docs:    http://localhost:8012/api/v1/docs
 echo   - Dashboard:   http://localhost:3000
 echo.
-echo Press any key to close this window (services will keep running)...
-pause >nul
+timeout /t 5 /nobreak >nul
