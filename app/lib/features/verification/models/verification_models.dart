@@ -1,21 +1,18 @@
+import 'package:flutter/material.dart';
+
+/// مراحل التحقق — متطابقة مع VerificationStage في الباك‌إند
 enum VerificationStage {
   documentImageQuality,
   documentCropping,
   documentFaceExtraction,
-  selfieLiveness,
   faceMatching,
-  biometric,
-  ml,
   ocr,
+  aiVerification,
+  dataVerification,
   blockchain,
 }
 
-enum VerificationStatus {
-  pending,
-  running,
-  success,
-  failed,
-}
+enum VerificationStatus { pending, running, success, failed }
 
 VerificationStage stageFromString(String value) {
   switch (value.toUpperCase()) {
@@ -25,20 +22,68 @@ VerificationStage stageFromString(String value) {
       return VerificationStage.documentCropping;
     case 'DOCUMENT_FACE_EXTRACTION':
       return VerificationStage.documentFaceExtraction;
-    case 'SELFIE_LIVENESS':
-      return VerificationStage.selfieLiveness;
     case 'FACE_MATCHING':
       return VerificationStage.faceMatching;
-    case 'BIOMETRIC':
-      return VerificationStage.biometric;
-    case 'ML':
-      return VerificationStage.ml;
     case 'OCR':
       return VerificationStage.ocr;
+    case 'AI_VERIFICATION':
+      return VerificationStage.aiVerification;
+    case 'DATA_VERIFICATION':
+      return VerificationStage.dataVerification;
     case 'BLOCKCHAIN':
       return VerificationStage.blockchain;
+    // Legacy fallbacks
+    case 'SELFIE_LIVENESS':
+    case 'BIOMETRIC':
+      return VerificationStage.faceMatching;
+    case 'ML':
+      return VerificationStage.aiVerification;
     default:
-      return VerificationStage.biometric;
+      return VerificationStage.documentImageQuality;
+  }
+}
+
+/// تسمية عربية لكل مرحلة تحقق
+String stageArabicLabel(VerificationStage stage) {
+  switch (stage) {
+    case VerificationStage.documentImageQuality:
+      return 'جودة الصورة';
+    case VerificationStage.documentCropping:
+      return 'قص الوثيقة';
+    case VerificationStage.documentFaceExtraction:
+      return 'استخراج الوجه';
+    case VerificationStage.faceMatching:
+      return 'مطابقة الوجه';
+    case VerificationStage.ocr:
+      return 'قراءة النصوص';
+    case VerificationStage.aiVerification:
+      return 'تحقق الذكاء الاصطناعي';
+    case VerificationStage.dataVerification:
+      return 'مطابقة البيانات';
+    case VerificationStage.blockchain:
+      return 'تسجيل البلوكتشين';
+  }
+}
+
+/// أيقونة لكل مرحلة تحقق
+IconData stageIcon(VerificationStage stage) {
+  switch (stage) {
+    case VerificationStage.documentImageQuality:
+      return Icons.image_search;
+    case VerificationStage.documentCropping:
+      return Icons.crop;
+    case VerificationStage.documentFaceExtraction:
+      return Icons.face_retouching_natural;
+    case VerificationStage.faceMatching:
+      return Icons.compare_arrows;
+    case VerificationStage.ocr:
+      return Icons.text_fields;
+    case VerificationStage.aiVerification:
+      return Icons.psychology;
+    case VerificationStage.dataVerification:
+      return Icons.fact_check;
+    case VerificationStage.blockchain:
+      return Icons.shield;
   }
 }
 
@@ -104,10 +149,14 @@ class VerificationRecord {
     return VerificationRecord(
       id: (json['id'] as num).toInt(),
       status: statusFromString((json['status'] as String?) ?? ''),
-      currentStage: currentStageValue == null ? null : stageFromString(currentStageValue),
+      currentStage: currentStageValue == null
+          ? null
+          : stageFromString(currentStageValue),
       errorMessage: json['error_message'] as String?,
       resultData: json['result_data'] as Map<String, dynamic>?,
-      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'] as String)
+          : null,
     );
   }
 }
