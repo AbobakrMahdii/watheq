@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.database import get_user_collection, database
-from ..models import UserCreate
+from ..models import UserCreate, UserUpdate
 from ..security import get_current_admin, get_current_super_admin
 from ..security import get_password_hash
 from datetime import datetime, timezone
@@ -75,6 +75,42 @@ async def create_user(user: UserCreate, admin=Depends(get_current_admin)):
     )
 
     return {"message": "User created"}
+
+
+# =========================
+# Edit user data (admin + super)
+# =========================
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    body: UserUpdate,
+    admin=Depends(get_current_admin),
+):
+    users = get_user_collection()
+    user = await _resolve_user_doc(users, user_id)
+
+    update_fields = {}
+    if body.name is not None:
+        update_fields["name"] = body.name
+    if body.username is not None:
+        # Check uniqueness
+        existing = await users.find_one({"username": body.username})
+        if existing and existing["_id"] != user["_id"]:
+            raise HTTPException(400, "Username already taken")
+        update_fields["username"] = body.username
+    if body.email is not None:
+        existing = await users.find_one({"email": body.email})
+        if existing and existing["_id"] != user["_id"]:
+            raise HTTPException(400, "Email already registered")
+        update_fields["email"] = body.email
+    if body.password is not None:
+        update_fields["password"] = get_password_hash(body.password)
+
+    if not update_fields:
+        raise HTTPException(400, "No fields to update")
+
+    await users.update_one({"_id": user["_id"]}, {"$set": update_fields})
+    return {"message": "User updated"}
 
 
 # =========================

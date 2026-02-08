@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type User = {
   _id: string;
@@ -27,11 +28,54 @@ export default function UsersPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
 
+  // Edit dialog state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+
   function resetForm() {
     setFormName("");
     setFormUsername("");
     setFormEmail("");
     setFormPassword("");
+  }
+
+  function openEdit(u: User) {
+    setEditingUser(u);
+    setEditName(u.name || "");
+    setEditUsername(u.username || "");
+    setEditEmail(u.email || "");
+    setEditPassword("");
+    setEditOpen(true);
+  }
+
+  async function submitEdit() {
+    if (!editingUser) return;
+    const body: Record<string, string> = {};
+    if (editName.trim() && editName !== editingUser.name) body.name = editName.trim();
+    if (editUsername.trim() !== (editingUser.username || "")) body.username = editUsername.trim();
+    if (editEmail.trim() && editEmail !== editingUser.email) body.email = editEmail.trim();
+    if (editPassword) body.password = editPassword;
+    if (Object.keys(body).length === 0) return toast.error("No changes to save");
+
+    try {
+      const res = await fetch(`/api/admin/users/${editingUser._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Request failed");
+      toast.success("User updated successfully");
+      setEditOpen(false);
+      setEditingUser(null);
+      await loadUsers();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update user");
+    }
   }
 
   async function loadUsers() {
@@ -125,7 +169,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Users</h1>
           <p className="text-sm text-slate-500">
@@ -134,7 +178,7 @@ export default function UsersPage() {
         </div>
         <button
           onClick={loadUsers}
-          className="text-sm bg-slate-900 text-white px-3 py-2 rounded hover:bg-slate-800 disabled:opacity-60"
+          className="rounded bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-60"
           disabled={loading}
         >
           {loading ? "Loading..." : "Refresh"}
@@ -142,51 +186,51 @@ export default function UsersPage() {
       </div>
 
       {canCreateUsers && (
-        <div className="bg-white p-4 rounded shadow mb-4">
-          <h2 className="font-semibold mb-3">Create User</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="mb-4 rounded bg-white p-4 shadow">
+          <h2 className="mb-3 font-semibold">Create User</h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input
               placeholder="Name"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
-              className="border px-3 py-2 rounded"
+              className="rounded border px-3 py-2"
             />
             <input
               placeholder="Username (optional)"
               value={formUsername}
               onChange={(e) => setFormUsername(e.target.value)}
-              className="border px-3 py-2 rounded"
+              className="rounded border px-3 py-2"
             />
             <input
               placeholder="Email"
               value={formEmail}
               onChange={(e) => setFormEmail(e.target.value)}
-              className="border px-3 py-2 rounded"
+              className="rounded border px-3 py-2"
             />
             <input
               placeholder="Password"
               type="password"
               value={formPassword}
               onChange={(e) => setFormPassword(e.target.value)}
-              className="border px-3 py-2 rounded"
+              className="rounded border px-3 py-2"
             />
           </div>
           <div className="mt-3 flex gap-2">
             <button
               onClick={createUser}
               disabled={loading}
-              className="text-sm bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+              className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
             >
               Add User
             </button>
-            <button onClick={resetForm} className="text-sm px-3 py-2 rounded border hover:bg-slate-50">
+            <button onClick={resetForm} className="rounded border px-3 py-2 text-sm hover:bg-slate-50">
               Clear
             </button>
           </div>
         </div>
       )}
 
-      <div className="bg-white p-4 rounded shadow">
+      <div className="rounded bg-white p-4 shadow">
         <table className="w-full text-left">
           <thead>
             <tr>
@@ -209,18 +253,25 @@ export default function UsersPage() {
                 <td className="py-2">{u.role}</td>
                 <td className="py-2">
                   <span
-                    className={`px-2 py-1 rounded text-xs ${
+                    className={`rounded px-2 py-1 text-xs ${
                       u.deleted_at
                         ? "bg-slate-200 text-slate-600"
                         : u.is_active === false
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-green-100 text-green-800"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-green-100 text-green-800"
                     }`}
                   >
                     {u.deleted_at ? "Deleted" : u.is_active === false ? "Suspended" : "Active"}
                   </span>
                 </td>
-                <td className="py-2 space-x-3">
+                <td className="space-x-3 py-2">
+                  <button
+                    className="text-sm text-green-700 hover:underline disabled:opacity-60"
+                    disabled={!canModerateUsers || loading || !!u.deleted_at}
+                    onClick={() => openEdit(u)}
+                  >
+                    Edit
+                  </button>
                   <button
                     className="text-sm text-blue-700 hover:underline disabled:opacity-60"
                     disabled={!canManageRoles || loading || !!u.deleted_at}
@@ -248,6 +299,62 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات المستخدم</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="text-sm text-slate-600">Name</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Username</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">Email</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">New Password (leave empty to keep)</label>
+              <input
+                className="w-full rounded border px-3 py-2"
+                type="password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={submitEdit}
+                className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                Save Changes
+              </button>
+              <button onClick={() => setEditOpen(false)} className="rounded border px-4 py-2 text-sm hover:bg-slate-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
