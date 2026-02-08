@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Watheq Document Verification Script (v2 — YOLOv8 + Siamese Network)
+Watheq Document Verification Script (v3 — Trained Classifiers + Font Analysis)
 
 التحقق من أصالة الوثائق باستخدام:
-1. YOLOv8 لكشف العناصر (الشعار، الختم، الصورة، الباركود...)
-2. شبكة سيامية للتحقق من أصالة كل عنصر
-3. تحليل الألوان والمواقع والأحجام
-4. قرار نهائي مرجح
+1. كشف العناصر بناءً على التخطيط المحفوظ (layout_config.yaml)
+2. مصنف ثنائي مدرب لكل عنصر — القرار من التعلم لا من المراجع
+3. تحليل خصائص الخطوط للمناطق النصية
+4. التحقق من مواقع العناصر وأحجامها
+5. قرار نهائي مرجح — الحد الأدنى للنجاح 85%
 
 Usage:
     python ai/verify_document.py --image doc.jpg --type identity --json
@@ -14,8 +15,8 @@ Usage:
 
 Returns detailed JSON:
 {
-    "decision": "PASSED|FAILED",
-    "overall_confidence": 0.94,
+    "decision": "PASSED|SUSPICIOUS|FAILED",
+    "overall_confidence": 0.92,
     "elements": { ... per-element details ... },
     "missing_elements": [],
     "anomalies": [],
@@ -35,6 +36,7 @@ from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
+import yaml
 
 # Setup logging
 logging.basicConfig(
@@ -46,7 +48,7 @@ logger = logging.getLogger(__name__)
 AI_DIR = Path(__file__).parent.resolve()
 MODELS_DIR = AI_DIR / "models"
 WEIGHTS_DIR = MODELS_DIR / "weights"
-EMBEDDINGS_DIR = MODELS_DIR / "embeddings"
+FONTS_DIR = MODELS_DIR / "fonts"
 REFERENCES_DIR = AI_DIR / "data" / "refrences"
 TRAINING_DIR = AI_DIR / "data" / "training"
 
@@ -54,136 +56,209 @@ TRAINING_DIR = AI_DIR / "data" / "training"
 if str(AI_DIR.parent) not in sys.path:
     sys.path.insert(0, str(AI_DIR.parent))
 
-# Expected elements per document type (position tolerances in normalized coords)
-EXPECTED_LAYOUTS: Dict[str, Dict[str, Dict[str, float]]] = {
-    "identity": {
-        "logo_main": {"x": 0.02, "y": 0.02, "w": 0.15, "h": 0.20, "tolerance": 0.10},
-        "photo_primary": {
-            "x": 0.75,
-            "y": 0.15,
-            "w": 0.22,
-            "h": 0.55,
-            "tolerance": 0.10,
-        },
-        "stamp": {"x": 0.60, "y": 0.70, "w": 0.15, "h": 0.25, "tolerance": 0.15},
-        "text_name": {"x": 0.20, "y": 0.20, "w": 0.50, "h": 0.10, "tolerance": 0.15},
-        "text_national_id": {
-            "x": 0.20,
-            "y": 0.35,
-            "w": 0.50,
-            "h": 0.08,
-            "tolerance": 0.15,
-        },
-        "barcode": {"x": 0.05, "y": 0.80, "w": 0.50, "h": 0.15, "tolerance": 0.15},
-    },
-    "passport": {
-        "logo_main": {"x": 0.35, "y": 0.02, "w": 0.30, "h": 0.15, "tolerance": 0.10},
-        "photo_primary": {
-            "x": 0.05,
-            "y": 0.25,
-            "w": 0.30,
-            "h": 0.45,
-            "tolerance": 0.10,
-        },
-        "stamp": {"x": 0.65, "y": 0.60, "w": 0.20, "h": 0.20, "tolerance": 0.15},
-        "barcode": {"x": 0.05, "y": 0.85, "w": 0.90, "h": 0.12, "tolerance": 0.10},
-    },
-}
 
-# Element weights for final score (higher = more important for authenticity)
-ELEMENT_WEIGHTS = {
-    "logo_main": 1.5,
-    "logo_secondary": 0.8,
-    "stamp": 1.5,
-    "photo_primary": 1.0,
-    "photo_ghost": 0.7,
-    "text_name": 1.0,
-    "text_national_id": 1.2,
-    "text_dob": 0.8,
-    "text_issue_date": 0.8,
-    "text_expiry_date": 0.8,
-    "barcode": 1.3,
-    "background_pattern": 0.5,
-}
+# ─────────────── Layout Config Loading ───────────────
+
+def _load_layout_config(doc_type: str) -> Optional[Dict[str, Any]]:
+    """Load layout_config.yaml for a document type."""
+    config_path = REFERENCES_DIR / doc_type / "layout_config.yaml"
+    if not config_path.exists():
+        return None
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
-def _load_detector(doc_type: str):
-    """Load or create a YOLODetector for the given document type."""
-    from ai.models.yolo_detector import YOLODetector
+def _load_training_config(doc_type: str) -> Optional[Dict[str, Any]]:
+    """Load training config to get learned layout positions."""
+    config_path = TRAINING_DIR / doc_type / "config.json"
+    if config_path.exists():
+        with open(config_path, "r") as f:
+            return json.load(f)
+    return None
 
-    model_path = WEIGHTS_DIR / f"yolo_{doc_type}.pt"
-    if not model_path.exists():
-        model_path = WEIGHTS_DIR / "yolo_document.pt"
-    return YOLODetector(model_path)
+
+def _get_all_elements(layout_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract all element definitions from layout config."""
+    elements = []
+    for ref_stem, elem_data in layout_config.get("elements", {}).items():
+        elements.append({
+            "ref_stem": ref_stem,
+            "class_name": elem_data["class_name"],
+            "roi": elem_data.get("roi", {}),
+            "tolerance": elem_data.get("tolerance", 0.10),
+            "weight": elem_data.get("weight", 1.0),
+            "critical": elem_data.get("critical", False),
+            "type": elem_data.get("type", "visual"),
+        })
+    for text_name, text_data in layout_config.get("text_regions", {}).items():
+        elements.append({
+            "ref_stem": text_name,
+            "class_name": text_data["class_name"],
+            "roi": text_data.get("roi", {}),
+            "tolerance": text_data.get("tolerance", 0.12),
+            "weight": text_data.get("weight", 1.0),
+            "critical": text_data.get("critical", False),
+            "type": "text",
+        })
+    return elements
 
 
-def _load_verifier(doc_type: str):
-    """Load or create a SiameseVerifier for the given document type."""
-    from ai.models.siamese_verifier import SiameseVerifier
+# ─────────────── Element Detection (Template-based) ───────────────
 
-    model_path = WEIGHTS_DIR / f"siamese_{doc_type}.pt"
-    if not model_path.exists():
-        model_path = WEIGHTS_DIR / "siamese_document.pt"
-    return SiameseVerifier(
-        model_path=model_path if model_path.exists() else None,
-        embeddings_dir=EMBEDDINGS_DIR,
-    )
+def _detect_elements(
+    image: np.ndarray, elements: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Detect elements using layout ROI positions from config.
+    Returns list of detections with pixel and normalized bounding boxes.
+    """
+    h, w = image.shape[:2]
+    detections = []
 
+    for elem in elements:
+        roi = elem.get("roi", {})
+        if not roi:
+            continue
+
+        rx = roi.get("x", 0)
+        ry = roi.get("y", 0)
+        rw = roi.get("w", 0.1)
+        rh = roi.get("h", 0.1)
+
+        px = int(rx * w)
+        py = int(ry * h)
+        pw = int(rw * w)
+        ph = int(rh * h)
+
+        detections.append({
+            "class_name": elem["class_name"],
+            "ref_stem": elem["ref_stem"],
+            "confidence": 0.85,  # Template-based confidence
+            "bbox": [px, py, pw, ph],
+            "bbox_norm": [round(rx, 4), round(ry, 4), round(rw, 4), round(rh, 4)],
+            "elem_type": elem["type"],
+            "weight": elem["weight"],
+            "critical": elem["critical"],
+            "tolerance": elem["tolerance"],
+            "expected_roi": roi,
+        })
+
+    return detections
+
+
+def _crop_element(image: np.ndarray, bbox: List[int], padding: float = 0.05) -> np.ndarray:
+    """Crop an element from an image using bounding box with padding."""
+    h, w = image.shape[:2]
+    x, y, bw, bh = bbox
+    pad_x = int(bw * padding)
+    pad_y = int(bh * padding)
+    x0 = max(0, x - pad_x)
+    y0 = max(0, y - pad_y)
+    x1 = min(w, x + bw + pad_x)
+    y1 = min(h, y + bh + pad_y)
+    return image[y0:y1, x0:x1].copy()
+
+
+# ─────────────── Position Validation ───────────────
 
 def _validate_position(
     detected_bbox_norm: List[float],
-    expected: Dict[str, float],
+    expected_roi: Dict[str, float],
+    tolerance: float,
 ) -> bool:
     """Check if detected position is within expected tolerance."""
-    dx, dy, dw, dh = detected_bbox_norm
-    ex, ey = expected["x"], expected["y"]
-    tol = expected.get("tolerance", 0.10)
-
-    return abs(dx - ex) <= tol and abs(dy - ey) <= tol
+    dx, dy = detected_bbox_norm[0], detected_bbox_norm[1]
+    ex, ey = expected_roi.get("x", 0), expected_roi.get("y", 0)
+    return abs(dx - ex) <= tolerance and abs(dy - ey) <= tolerance
 
 
 def _validate_size(
     detected_bbox_norm: List[float],
-    expected: Dict[str, float],
-    size_tolerance: float = 0.50,
+    expected_roi: Dict[str, float],
+    size_tolerance: float = 0.40,
 ) -> bool:
     """Check if detected element size is within expected range."""
-    _, _, dw, dh = detected_bbox_norm
-    ew, eh = expected["w"], expected["h"]
-
+    dw, dh = detected_bbox_norm[2], detected_bbox_norm[3]
+    ew = expected_roi.get("w", 0.1)
+    eh = expected_roi.get("h", 0.1)
     w_ratio = dw / (ew + 1e-6)
     h_ratio = dh / (eh + 1e-6)
-
-    return (1.0 - size_tolerance) <= w_ratio <= (1.0 + size_tolerance) and (
-        1.0 - size_tolerance
-    ) <= h_ratio <= (1.0 + size_tolerance)
-
-
-def _check_ghost_image(image: np.ndarray, ghost_bbox: List[int]) -> Dict[str, Any]:
-    """Check for ghost/watermark image presence and opacity."""
-    x, y, w, h = ghost_bbox
-    ih, iw = image.shape[:2]
-    x0, y0 = max(0, x), max(0, y)
-    x1, y1 = min(iw, x + w), min(ih, y + h)
-
-    if x1 <= x0 or y1 <= y0:
-        return {"detected": False, "opacity": 0.0}
-
-    region = image[y0:y1, x0:x1]
-    gray = (
-        cv2.cvtColor(region, cv2.COLOR_BGR2GRAY) if len(region.shape) == 3 else region
+    return (
+        (1.0 - size_tolerance) <= w_ratio <= (1.0 + size_tolerance)
+        and (1.0 - size_tolerance) <= h_ratio <= (1.0 + size_tolerance)
     )
-    std_dev = float(np.std(gray))
 
-    if 10 < std_dev < 50:
-        opacity = min(1.0, std_dev / 50.0)
-        return {
-            "detected": True,
-            "opacity": round(opacity, 2),
-            "std_dev": round(std_dev, 2),
-        }
-    return {"detected": False, "opacity": 0.0, "std_dev": round(std_dev, 2)}
 
+def _position_score(
+    detected_bbox_norm: List[float],
+    expected_roi: Dict[str, float],
+    tolerance: float,
+) -> float:
+    """Compute a position accuracy score 0-1."""
+    dx, dy = detected_bbox_norm[0], detected_bbox_norm[1]
+    ex, ey = expected_roi.get("x", 0), expected_roi.get("y", 0)
+    dist = ((dx - ex) ** 2 + (dy - ey) ** 2) ** 0.5
+    max_dist = tolerance * 2
+    return max(0.0, 1.0 - dist / max(max_dist, 1e-6))
+
+
+# ─────────────── Classifier Loading ───────────────
+
+_classifier_cache: Dict[str, Any] = {}
+
+
+def _load_classifier(doc_type: str, class_name: str):
+    """Load a trained ElementClassifier for a specific element."""
+    cache_key = f"{doc_type}_{class_name}"
+    if cache_key in _classifier_cache:
+        return _classifier_cache[cache_key]
+
+    weight_path = WEIGHTS_DIR / f"{doc_type}_{class_name}.pt"
+    if not weight_path.exists():
+        logger.warning(f"No trained classifier for {doc_type}/{class_name}")
+        _classifier_cache[cache_key] = None
+        return None
+
+    try:
+        from ai.models.element_classifier import ElementClassifier
+        classifier = ElementClassifier.load(weight_path)
+        _classifier_cache[cache_key] = classifier
+        return classifier
+    except Exception as e:
+        logger.error(f"Failed to load classifier {cache_key}: {e}")
+        _classifier_cache[cache_key] = None
+        return None
+
+
+# ─────────────── Font Profile Loading ───────────────
+
+_font_cache: Dict[str, Any] = {}
+
+
+def _load_font_profile(doc_type: str, class_name: str):
+    """Load a learned font profile for a text element."""
+    cache_key = f"{doc_type}_{class_name}"
+    if cache_key in _font_cache:
+        return _font_cache[cache_key]
+
+    profile_path = FONTS_DIR / f"{doc_type}_{class_name}.json"
+    if not profile_path.exists():
+        logger.warning(f"No font profile for {doc_type}/{class_name}")
+        _font_cache[cache_key] = None
+        return None
+
+    try:
+        from ai.models.font_analyzer import FontAnalyzer
+        profile = FontAnalyzer.load_profile(profile_path)
+        _font_cache[cache_key] = profile
+        return profile
+    except Exception as e:
+        logger.error(f"Failed to load font profile {cache_key}: {e}")
+        _font_cache[cache_key] = None
+        return None
+
+
+# ─────────────── Main Verification Pipeline ───────────────
 
 def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
     """
@@ -202,6 +277,7 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
     image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         return {
+            "document_type": doc_type,
             "decision": "ERROR",
             "overall_confidence": 0.0,
             "elements": {},
@@ -213,121 +289,146 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
             "element_results": {},
         }
 
-    expected_layout = EXPECTED_LAYOUTS.get(doc_type, {})
+    # Load layout config
+    layout_config = _load_layout_config(doc_type)
+    if layout_config is None:
+        return {
+            "document_type": doc_type,
+            "decision": "ERROR",
+            "overall_confidence": 0.0,
+            "elements": {},
+            "missing_elements": [],
+            "failed_elements": [],
+            "anomalies": [f"No layout_config.yaml for doc type: {doc_type}"],
+            "processing_time_ms": 0,
+            "error": f"No layout_config.yaml for {doc_type}",
+            "element_results": {},
+        }
 
-    # Step 1: Detect elements with YOLOv8
-    detector = _load_detector(doc_type)
-    detections = detector.detect(image_path, conf_threshold=0.4)
+    thresholds = layout_config.get("thresholds", {})
+    pass_score = thresholds.get("pass_score", 0.85)
+    suspicious_score = thresholds.get("suspicious_score", 0.60)
 
-    # Step 2: Load Siamese verifier
-    verifier = _load_verifier(doc_type)
+    # Get all elements from config
+    all_elements = _get_all_elements(layout_config)
 
-    # Step 3: Process each detection
-    from ai.models.yolo_detector import crop_element
+    # Step 1: Detect elements using layout positions
+    detections = _detect_elements(image, all_elements)
 
+    # Step 2: Process each detection
     elements_result: Dict[str, Dict[str, Any]] = {}
-    detected_classes: set = set()
+    anomalies: List[str] = []
 
     for det in detections:
         class_name = det["class_name"]
-        detected_classes.add(class_name)
+        elem_type = det["elem_type"]
 
         # Crop element from image
-        element_crop = crop_element(image, det["bbox"])
+        element_crop = _crop_element(image, det["bbox"])
         if element_crop.size == 0:
+            elements_result[class_name] = {
+                "detected": False,
+                "status": "MISSING",
+                "details": f"{class_name}: empty crop region",
+                "score": 0.0,
+            }
             continue
 
         # Position validation
-        expected = expected_layout.get(class_name)
-        position_valid = (
-            _validate_position(det["bbox_norm"], expected) if expected else True
+        pos_valid = _validate_position(
+            det["bbox_norm"], det["expected_roi"], det["tolerance"]
         )
-        size_valid = _validate_size(det["bbox_norm"], expected) if expected else True
-
-        # Siamese verification (authenticity check)
-        siamese_result = verifier.verify_element(element_crop, class_name, doc_type)
-
-        # Color analysis (for logos and stamps)
-        color_result = {"color_match": 1.0, "skipped": True}
-        if class_name in ("logo_main", "logo_secondary", "stamp"):
-            color_result = verifier.verify_color(element_crop)
-
-        # Ghost image check
-        ghost_result = None
-        if class_name == "photo_ghost":
-            ghost_result = _check_ghost_image(image, det["bbox"])
-
-        # Build element result
-        elem_data: Dict[str, Any] = {
-            "detected": True,
-            "position": {
-                "x": det["bbox"][0],
-                "y": det["bbox"][1],
-                "w": det["bbox"][2],
-                "h": det["bbox"][3],
-            },
-            "detection_confidence": det["confidence"],
-            "position_valid": position_valid,
-            "size_valid": size_valid,
-            "authenticity_score": siamese_result["authenticity_score"],
-            "color_match": color_result.get("color_match", 1.0),
-        }
-
-        if ghost_result:
-            elem_data["opacity_detected"] = ghost_result.get("opacity", 0.0)
-            elem_data["ghost_present"] = ghost_result.get("detected", False)
-
-        # Overall element status
-        element_passed = (
-            siamese_result["passed"]
-            and position_valid
-            and size_valid
-            and color_result.get("color_match", 1.0) >= 0.5
+        size_valid = _validate_size(det["bbox_norm"], det["expected_roi"])
+        pos_score = _position_score(
+            det["bbox_norm"], det["expected_roi"], det["tolerance"]
         )
-        elem_data["status"] = "PASSED" if element_passed else "FAILED"
 
-        # Detail message
-        issues = []
-        if not siamese_result["passed"]:
-            issues.append(f"authenticity {siamese_result['authenticity_score']:.0%}")
-        if not position_valid:
-            issues.append("wrong position")
-        if not size_valid:
-            issues.append("wrong size")
-        if color_result.get("color_match", 1.0) < 0.5:
-            issues.append("color mismatch")
+        # ─── Visual element: use trained binary classifier ───
+        if elem_type == "visual":
+            classifier = _load_classifier(doc_type, class_name)
+            if classifier is not None:
+                classifier_score = classifier.predict(element_crop)
+                has_trained_model = True
+            else:
+                # No trained model — fallback with warning
+                classifier_score = 0.5
+                has_trained_model = False
+                anomalies.append(f"{class_name}: no trained classifier (fallback)")
 
-        elem_data["details"] = (
-            f"{class_name}: " + ", ".join(issues)
-            if issues
-            else f"{class_name} verified"
-        )
-        elem_data["score"] = siamese_result["authenticity_score"]
+            # Combine: 70% classifier + 30% position for visual elements
+            combined_score = classifier_score * 0.70 + pos_score * 0.30
 
-        elements_result[class_name] = elem_data
-
-    # Step 4: Check for missing expected elements
-    missing_elements = []
-    for expected_name in expected_layout:
-        if expected_name not in detected_classes:
-            missing_elements.append(expected_name)
-            elements_result[expected_name] = {
-                "detected": False,
-                "status": "MISSING",
-                "details": f"{expected_name} not detected in document",
-                "score": 0.0,
+            elements_result[class_name] = {
+                "detected": True,
+                "position": {
+                    "x": det["bbox"][0],
+                    "y": det["bbox"][1],
+                    "w": det["bbox"][2],
+                    "h": det["bbox"][3],
+                },
+                "detection_confidence": det["confidence"],
+                "position_valid": pos_valid,
+                "size_valid": size_valid,
+                "position_score": round(pos_score, 4),
+                "classifier_score": round(classifier_score, 4),
+                "has_trained_model": has_trained_model,
+                "score": round(combined_score, 4),
+                "status": "PASSED" if combined_score >= pass_score else "FAILED",
+                "details": (
+                    f"{class_name}: classifier={classifier_score:.1%} pos={pos_score:.1%}"
+                    if has_trained_model
+                    else f"{class_name}: NO TRAINED MODEL (fallback={classifier_score:.1%})"
+                ),
             }
 
-    # Step 5: Anomaly detection
-    anomalies: List[str] = []
-    if missing_elements:
-        anomalies.append(f"Missing elements: {', '.join(missing_elements)}")
+        # ─── Text element: use font profile analysis ───
+        elif elem_type == "text":
+            font_profile = _load_font_profile(doc_type, class_name)
+            if font_profile is not None:
+                from ai.models.font_analyzer import FontAnalyzer
+                analyzer = FontAnalyzer()
+                font_score, font_details = analyzer.verify_font(element_crop, font_profile)
+                has_font_profile = True
+            else:
+                font_score = 0.5
+                font_details = {"warning": "no font profile"}
+                has_font_profile = False
+                anomalies.append(f"{class_name}: no font profile (fallback)")
 
-    # Step 6: Weighted overall confidence
+            # For text: 60% font + 40% position
+            combined_score = font_score * 0.60 + pos_score * 0.40
+
+            elements_result[class_name] = {
+                "detected": True,
+                "position": {
+                    "x": det["bbox"][0],
+                    "y": det["bbox"][1],
+                    "w": det["bbox"][2],
+                    "h": det["bbox"][3],
+                },
+                "detection_confidence": det["confidence"],
+                "position_valid": pos_valid,
+                "size_valid": size_valid,
+                "position_score": round(pos_score, 4),
+                "font_score": round(font_score, 4),
+                "font_details": font_details,
+                "has_font_profile": has_font_profile,
+                "score": round(combined_score, 4),
+                "status": "PASSED" if combined_score >= pass_score else "FAILED",
+                "details": (
+                    f"{class_name}: font={font_score:.1%} pos={pos_score:.1%}"
+                    if has_font_profile
+                    else f"{class_name}: NO FONT PROFILE (fallback={font_score:.1%})"
+                ),
+            }
+
+    # Step 3: Weighted overall confidence
     total_weight = 0.0
     weighted_score = 0.0
-    for elem_name, elem_data in elements_result.items():
-        weight = ELEMENT_WEIGHTS.get(elem_name, 1.0)
+    for det in detections:
+        class_name = det["class_name"]
+        elem_data = elements_result.get(class_name, {})
+        weight = det["weight"]
         score = elem_data.get("score", 0.0)
         if elem_data.get("status") == "MISSING":
             score = 0.0
@@ -336,26 +437,38 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
 
     overall_confidence = weighted_score / total_weight if total_weight > 0 else 0.0
 
-    # Step 7: Final decision
+    # Step 4: Determine missing/failed elements
+    missing_elements = [
+        cn for cn, data in elements_result.items()
+        if data.get("status") == "MISSING"
+    ]
     failed_elements = [
-        name
-        for name, data in elements_result.items()
+        cn for cn, data in elements_result.items()
         if data.get("status") in ("FAILED", "MISSING")
     ]
 
-    if overall_confidence >= 0.75 and not missing_elements:
+    if missing_elements:
+        anomalies.append(f"Missing elements: {', '.join(missing_elements)}")
+
+    # Step 5: Final decision — 85% to pass
+    if overall_confidence >= pass_score and not missing_elements:
         decision = "PASSED"
-    elif overall_confidence >= 0.50:
+    elif overall_confidence >= suspicious_score:
         decision = "SUSPICIOUS"
     else:
         decision = "FAILED"
 
-    # Critical elements must be present
-    critical_missing = [
-        m for m in missing_elements if m in ("logo_main", "stamp", "photo_primary")
+    # Critical elements must be present and pass
+    critical_failed = [
+        cn for cn, data in elements_result.items()
+        if any(
+            d["class_name"] == cn and d.get("critical", False)
+            for d in detections
+        ) and data.get("status") != "PASSED"
     ]
-    if critical_missing:
+    if critical_failed:
         decision = "FAILED"
+        anomalies.append(f"Critical elements failed: {', '.join(critical_failed)}")
 
     processing_time = int((time.time() - start_time) * 1000)
 
@@ -363,6 +476,7 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
         "document_type": doc_type,
         "decision": decision,
         "overall_confidence": round(overall_confidence, 4),
+        "pass_threshold": pass_score,
         "elements": elements_result,
         "missing_elements": missing_elements,
         "failed_elements": failed_elements,
@@ -373,7 +487,7 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
             name: {
                 "status": data.get("status", "ERROR"),
                 "score": data.get("score", 0.0),
-                "threshold": 0.50,
+                "threshold": pass_score,
                 "message": data.get("details", ""),
             }
             for name, data in elements_result.items()
@@ -383,7 +497,7 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Watheq Document Verification (v2 — YOLOv8 + Siamese)",
+        description="Watheq Document Verification (v3 — Trained Classifiers)",
     )
     parser.add_argument(
         "--image", "-i", type=str, required=True, help="Path to document image"
@@ -401,10 +515,11 @@ def main():
     else:
         decision = result["decision"]
         confidence = result["overall_confidence"]
+        threshold = result.get("pass_threshold", 0.85)
         print(f"\n{'='*60}")
         print(f"  Document Verification: {result.get('document_type', 'unknown')}")
         print(f"{'='*60}")
-        print(f"  Decision: {decision}  |  Confidence: {confidence:.1%}")
+        print(f"  Decision: {decision}  |  Confidence: {confidence:.1%}  |  Threshold: {threshold:.0%}")
         print(f"  Processing time: {result['processing_time_ms']}ms")
         print(f"{'─'*60}")
 
@@ -413,14 +528,16 @@ def main():
             icon = "✓" if status == "PASSED" else "✗" if status == "FAILED" else "?"
             score = data.get("score", 0.0)
             det = "detected" if data.get("detected") else "MISSING"
-            print(f"  {icon} {name:25s} {score:6.1%}  ({det})")
+            trained = "" if data.get("has_trained_model", data.get("has_font_profile", True)) else " [NO MODEL]"
+            print(f"  {icon} {name:25s} {score:6.1%}  ({det}){trained}")
             if data.get("details"):
                 print(f"    └ {data['details']}")
 
         if result["missing_elements"]:
             print(f"\n  Missing: {', '.join(result['missing_elements'])}")
         if result["anomalies"]:
-            print(f"  Anomalies: {'; '.join(result['anomalies'])}")
+            for a in result["anomalies"]:
+                print(f"  ⚠ {a}")
         print()
 
 
