@@ -38,6 +38,26 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
   String? _error;
   bool _isStreaming = false;
 
+  /// The current step the user must complete (enforced order).
+  /// 0 = look left, 1 = look right, 2 = blink, 3 = face forward.
+  int _currentStep = 0;
+
+  /// Instruction text for the user.
+  String get _instruction {
+    switch (_currentStep) {
+      case 0:
+        return 'حرّك رأسك إلى اليسار';
+      case 1:
+        return 'حرّك رأسك إلى اليمين';
+      case 2:
+        return 'ارمش بعينيك';
+      case 3:
+        return 'انظر للكاميرا مباشرة';
+      default:
+        return 'جاري الالتقاط...';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -157,28 +177,56 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
         final leftEye = face.leftEyeOpenProbability;
         final rightEye = face.rightEyeOpenProbability;
 
-        if (angleY == null) {
-          if (elapsed.inMilliseconds > 2000) {
+        // ── Sequential enforcement: only check the CURRENT step ──
+
+        if (_currentStep == 0) {
+          // Step 1: Look LEFT
+          if (angleY == null) {
+            if (elapsed.inMilliseconds > 3000) {
+              _leftDone = true;
+              _currentStep = 1;
+            }
+          } else if (angleY < -12) {
             _leftDone = true;
+            _currentStep = 1;
+          }
+        } else if (_currentStep == 1) {
+          // Step 2: Look RIGHT (only after left is done)
+          if (angleY == null) {
+            if (elapsed.inMilliseconds > 5000) {
+              _rightDone = true;
+              _currentStep = 2;
+            }
+          } else if (angleY > 12) {
             _rightDone = true;
+            _currentStep = 2;
           }
-        } else {
-          if (!_leftDone && angleY < -12) _leftDone = true;
-          if (!_rightDone && angleY > 12) _rightDone = true;
-        }
-
-        if (!_blinkDone) {
+        } else if (_currentStep == 2) {
+          // Step 3: BLINK (only after left+right are done)
           if (leftEye != null && rightEye != null) {
-            if (leftEye < 0.4 && rightEye < 0.4) _blinkDone = true;
-          } else if (elapsed.inMilliseconds > 2000) {
+            if (leftEye < 0.4 && rightEye < 0.4) {
+              _blinkDone = true;
+              _currentStep = 3;
+            }
+          } else if (elapsed.inMilliseconds > 7000) {
             _blinkDone = true;
+            _currentStep = 3;
+          }
+        } else if (_currentStep == 3) {
+          // Step 4: FACE FORWARD — head straight + eyes open for a good selfie
+          final isFacingForward = angleY != null && angleY.abs() < 10;
+          final eyesOpen = (leftEye ?? 1.0) > 0.5 && (rightEye ?? 1.0) > 0.5;
+          if (isFacingForward && eyesOpen) {
+            await _finishCapture();
           }
         }
 
-        if (_leftDone && _rightDone && _blinkDone) {
+        if (_currentStep >= 4) {
+          // All steps done (shouldn't reach here, but safety net)
           await _finishCapture();
         }
-        if (elapsed.inSeconds > 10 && mounted) {
+        // Hard timeout: auto-capture after 15 seconds regardless
+        if (elapsed.inSeconds > 15 && mounted) {
           await _finishCapture();
         }
       } else {
@@ -301,6 +349,36 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
       body: Stack(
         children: [
           CameraPreview(_controller!),
+          // Current instruction banner
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 24,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                key: ValueKey(_currentStep),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(
+                  _instruction,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Steps checklist
           Positioned(
             left: 16,
             right: 16,
@@ -311,9 +389,26 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _StatusRow(label: 'حرّك الرأس يسار', done: _leftDone),
-                    _StatusRow(label: 'حرّك الرأس يمين', done: _rightDone),
-                    _StatusRow(label: 'ارمش العين', done: _blinkDone),
+                    _StatusRow(
+                      label: '١. حرّك الرأس يسار',
+                      done: _leftDone,
+                      active: _currentStep == 0,
+                    ),
+                    _StatusRow(
+                      label: '٢. حرّك الرأس يمين',
+                      done: _rightDone,
+                      active: _currentStep == 1,
+                    ),
+                    _StatusRow(
+                      label: '٣. ارمش العين',
+                      done: _blinkDone,
+                      active: _currentStep == 2,
+                    ),
+                    _StatusRow(
+                      label: '٤. انظر للكاميرا',
+                      done: _currentStep > 3,
+                      active: _currentStep == 3,
+                    ),
                   ],
                 ),
               ),
@@ -323,7 +418,7 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          AppSnackbars.info(context, 'اتبع التعليمات لإكمال التحقق');
+          AppSnackbars.info(context, 'اتبع التعليمات بالترتيب لإكمال التحقق');
         },
         child: const Icon(Icons.info_outline),
       ),
@@ -332,22 +427,44 @@ class _SelfieLivenessScreenState extends State<SelfieLivenessScreen>
 }
 
 class _StatusRow extends StatelessWidget {
-  const _StatusRow({required this.label, required this.done});
+  const _StatusRow({
+    required this.label,
+    required this.done,
+    this.active = false,
+  });
 
   final String label;
   final bool done;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
+    final Color iconColor;
+    final IconData icon;
+    if (done) {
+      icon = Icons.check_circle;
+      iconColor = Colors.green;
+    } else if (active) {
+      icon = Icons.arrow_forward_ios;
+      iconColor = Colors.blue;
+    } else {
+      icon = Icons.radio_button_unchecked;
+      iconColor = Colors.grey;
+    }
+
     return Row(
       children: [
-        Icon(
-          done ? Icons.check_circle : Icons.radio_button_unchecked,
-          color: done ? Colors.green : Colors.grey,
-          size: 18,
-        ),
+        Icon(icon, color: iconColor, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(label)),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              color: active ? Colors.blue.shade800 : null,
+            ),
+          ),
+        ),
       ],
     );
   }
