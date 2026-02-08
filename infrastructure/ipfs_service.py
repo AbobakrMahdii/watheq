@@ -92,3 +92,46 @@ class IPFSService:
         except Exception as e:
             logger.error(f"Failed to retrieve cid={cid}: {e}")
             raise
+
+    # ── Extended methods (blockchain dashboard) ──────────────────
+
+    def list_pins(self) -> dict:
+        """List all pinned objects. Returns {CID: {Type: ...}, ...}."""
+        try:
+            r = requests.post(f"{self.base_url}/pin/ls")
+            r.raise_for_status()
+            data = r.json()
+            return data.get("Keys", {})
+        except Exception as e:
+            logger.error(f"Failed to list pins: {e}")
+            raise
+
+    def unpin(self, cid: str) -> dict:
+        """Unpin a CID from the local node."""
+        try:
+            r = requests.post(f"{self.base_url}/pin/rm", params={"arg": cid})
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            logger.error(f"Failed to unpin cid={cid}: {e}")
+            raise
+
+    def node_id(self) -> dict:
+        """Return IPFS node identity (PeerID, addresses, etc.)."""
+        try:
+            r = requests.post(f"{self.base_url}/id")
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            logger.error(f"Failed to get IPFS node ID: {e}")
+            raise
+
+    def repo_stat(self) -> dict:
+        """Return IPFS repo statistics (disk usage, object count)."""
+        try:
+            r = requests.post(f"{self.base_url}/repo/stat")
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            logger.error(f"Failed to get repo stat: {e}")
+            raise

@@ -33,6 +33,7 @@ export default function DashboardSidebar() {
       { href: "/dashboard/document-types", label: "أنواع الوثائق" },
       { href: "/dashboard/reports", label: "التقارير" },
       { href: "/dashboard/audit-logs", label: "سجل العمليات" },
+      { href: "/dashboard/blockchain", label: "البلوكتشين" },
     ];
     if (me?.role === "super_admin") {
       baseLinks.splice(2, 0, { href: "/dashboard/admins", label: "Admins" });
