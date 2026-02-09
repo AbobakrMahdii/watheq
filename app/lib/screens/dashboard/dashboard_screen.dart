@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../features/auth/services/auth_service.dart';
@@ -48,8 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).maybePop();
+              exit(exitCode);
             },
             child: const Text('خروج'),
           ),
@@ -132,7 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         drawer: _isSuperAdmin ? _buildDrawer() : null,
         appBar: _isSuperAdmin
             ? AppBar(
-                title: const Text('وثّق'),
+                title: const Text('وثيق'),
                 leading: Builder(
                   builder: (ctx) => IconButton(
                     icon: const Icon(Icons.menu),
