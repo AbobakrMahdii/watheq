@@ -101,10 +101,7 @@ export default function VerificationsPage() {
       if (!res.ok) throw new Error(json?.message || "فشل تحميل البيانات");
       setData(json);
     } catch (e: any) {
-      toast.error(
-        e?.message ||
-          "تعذر تنزيل التقرير",
-      );
+      toast.error(e?.message || "تعذر تنزيل التقرير");
     } finally {
       setLoading(false);
     }
@@ -215,14 +212,10 @@ export default function VerificationsPage() {
         <h1 className="text-xl font-semibold">التحققات</h1>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={exportData} disabled={exporting}>
-            {exporting
-              ? "جارٍ التصدير..."
-              : "تصدير CSV"}
+            {exporting ? "جارٍ التصدير..." : "تصدير CSV"}
           </Button>
           <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-            {loading
-              ? "جاري التحميل..."
-              : "تحديث"}
+            {loading ? "جاري التحميل..." : "تحديث"}
           </Button>
         </div>
       </div>
@@ -408,9 +401,7 @@ export default function VerificationsPage() {
                           onClick={() => downloadReport(v.id)}
                           disabled={reportingId === v.id}
                         >
-                          {reportingId === v.id
-                            ? "جاري التنزيل..."
-                            : "تنزيل التقرير"}
+                          {reportingId === v.id ? "جاري التنزيل..." : "تنزيل التقرير"}
                         </Button>
                       </div>
                     </TableCell>

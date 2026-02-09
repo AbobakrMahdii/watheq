@@ -164,8 +164,7 @@ export default function VerificationDetailPage() {
       if (headerFilename && headerFilename.startsWith("verifications_export_")) {
         throw new Error("تم استلام تقرير عام بدلاً من تقرير هذه العملية");
       }
-      const filename =
-        headerFilename || `verification_${id}_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      const filename = headerFilename || `verification_${id}_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -318,12 +317,16 @@ export default function VerificationDetailPage() {
             {reporting ? "جاري التنزيل..." : "تنزيل التقرير (CSV)"}
           </Button>
           <Badge
-          variant={
-            verification.status === "SUCCESS" ? "default" : verification.status === "FAILED" ? "destructive" : "outline"
-          }
-        >
-          {STATUS_LABELS[verification.status] || verification.status}
-        </Badge>
+            variant={
+              verification.status === "SUCCESS"
+                ? "default"
+                : verification.status === "FAILED"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
+            {STATUS_LABELS[verification.status] || verification.status}
+          </Badge>
         </div>
       </div>
 
