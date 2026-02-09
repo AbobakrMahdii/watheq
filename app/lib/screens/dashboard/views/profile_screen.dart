@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/connection_config_service.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../features/auth/models/user_profile.dart';
 import '../../../features/auth/services/auth_service.dart';
@@ -41,9 +43,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تسجيل الخروج'),
+        content: const Text('هل أنت متأكد من أنك تريد تسجيل الخروج؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('تسجيل الخروج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     await AuthService.instance.logout();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
+  bool _isAdmin() {
+    final role = _profile?.role ?? '';
+    return role == 'super_admin' || role == 'admin';
+  }
+
+  Future<void> _openAdminDashboard() async {
+    final baseUrl = ConnectionConfigService.instance.baseUrl;
+    final dashboardUrl = '$baseUrl/dashboard';
+    final uri = Uri.parse(dashboardUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        AppSnackbars.error(context, 'تعذر فتح لوحة التحكم');
+      }
+    }
   }
 
   String _avatarLetters() {
@@ -129,6 +168,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: AppDimensions.padLg),
+                  if (_isAdmin())
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(
+                          Icons.admin_panel_settings,
+                          color: AppColors.primary,
+                        ),
+                        title: const Text(
+                          'لوحة تحكم المشرف',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'افتح لوحة التحكم الإدارية في المتصفح.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        trailing: const Icon(Icons.open_in_browser, size: 16),
+                        onTap: _openAdminDashboard,
+                      ),
+                    ),
+                  if (_isAdmin()) const SizedBox(height: AppDimensions.padSm),
                   Card(
                     child: ListTile(
                       leading: const Icon(
