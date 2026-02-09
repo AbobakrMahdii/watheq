@@ -40,6 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 AI_DIR = Path(__file__).parent.resolve()
+PROJECT_ROOT = AI_DIR.parent
 REFERENCES_DIR = AI_DIR / "data" / "refrences"
 TRAINING_DIR = AI_DIR / "data" / "training"
 MODELS_DIR = AI_DIR / "models"
@@ -48,6 +49,18 @@ EMBEDDINGS_DIR = MODELS_DIR / "embeddings"
 FONTS_DIR = MODELS_DIR / "fonts"
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
+
+
+def to_relative_path(path: Path) -> str:
+    """Convert absolute path to relative path from project root with forward slashes."""
+    try:
+        rel_path = path.resolve().relative_to(PROJECT_ROOT)
+        # Use forward slashes for cross-platform compatibility
+        return str(rel_path).replace("\\", "/")
+    except ValueError:
+        # If path is outside project root, return as-is
+        return str(path).replace("\\", "/")
+
 
 # Ensure imports
 sys.path.insert(0, str(AI_DIR))
@@ -216,8 +229,8 @@ def generate_augmented_data(
         return {
             "status": "success",
             "element": ref_stem,
-            "reference_path": str(ref_path),
-            "output_dir": str(output_dir),
+            "reference_path": to_relative_path(ref_path),
+            "output_dir": to_relative_path(output_dir),
             "generated_at": datetime.now().isoformat(),
         }
     except Exception as e:
@@ -274,7 +287,7 @@ def train_element_classifier(
 
     result["class_name"] = class_name
     result["ref_stem"] = ref_stem
-    result["weight_path"] = str(save_path)
+    result["weight_path"] = to_relative_path(save_path)
     return result
 
 
@@ -344,7 +357,7 @@ def learn_text_font_profile(
     return {
         "status": "success",
         "class_name": class_name,
-        "profile_path": str(profile_path),
+        "profile_path": to_relative_path(profile_path),
         "ink_density": profile.ink_density,
         "stroke_width": profile.stroke_width_mean,
     }
@@ -424,7 +437,7 @@ def train_doc_type(
                     "message": f"{pt_path.name} already exists",
                     "class_name": class_name,
                     "ref_stem": ref_stem,
-                    "weight_path": str(pt_path),
+                    "weight_path": to_relative_path(pt_path),
                 }
                 continue
 
