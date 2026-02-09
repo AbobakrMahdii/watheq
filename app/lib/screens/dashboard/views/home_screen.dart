@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Watheq')),
+      appBar: AppBar(title: const Text('وثيق')),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(AppDimensions.padLg),
