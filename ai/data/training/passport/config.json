@@ -21,8 +21,8 @@
     "full": {
       "status": "success",
       "element": "full",
-      "reference_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\data\\refrences\\passport\\full.jpeg",
-      "output_dir": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\data\\training\\passport\\full",
+      "reference_path": "ai/data/refrences/passport/full.jpeg",
+      "output_dir": "ai/data/training/passport/full",
       "trained_at": "2026-02-07T18:23:55.223907",
       "threshold": 0.8
     },
@@ -34,8 +34,8 @@
     "seal": {
       "status": "success",
       "element": "seal",
-      "reference_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\data\\refrences\\passport\\seal.jpeg",
-      "output_dir": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\data\\training\\passport\\seal",
+      "reference_path": "ai/data/refrences/passport/seal.jpeg",
+      "output_dir": "ai/data/training/passport/seal",
       "trained_at": "2026-02-07T18:24:00.555987",
       "threshold": 0.8
     }
