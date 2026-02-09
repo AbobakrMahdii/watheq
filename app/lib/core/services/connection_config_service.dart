@@ -28,7 +28,7 @@ class ConnectionConfigService {
 
   /// The fully constructed base URL: `http://<ip>:<port>`
   String get baseUrl => 'http://$_ip:$_port';
-  
+
   /// The fully constructed dashboard URL: `http://<ip>:<dashboardPort>`
   String get dashboardUrl => 'http://$_ip:$_dashboardPort';
 

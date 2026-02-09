@@ -416,9 +416,7 @@ class _LoginScreenState extends State<LoginScreen>
                       labelText: 'منفذ لوحة التحكم',
                       hintText: '3200',
                       hintStyle: TextStyle(
-                        color: AppColors.textSecondary.withValues(
-                          alpha: 0.4,
-                        ),
+                        color: AppColors.textSecondary.withValues(alpha: 0.4),
                         fontFamily: 'monospace',
                       ),
                       prefixIcon: const Icon(Icons.dashboard, size: 20),
@@ -477,7 +475,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: TextStyle(
                                   fontFamily: 'monospace',
                                   fontSize: 11,
-                                  color: AppColors.primary.withValues(alpha: 0.8),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.8,
+                                  ),
                                   fontWeight: FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -509,7 +509,9 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: TextStyle(
                                   fontFamily: 'monospace',
                                   fontSize: 11,
-                                  color: AppColors.primary.withValues(alpha: 0.8),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.8,
+                                  ),
                                   fontWeight: FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
