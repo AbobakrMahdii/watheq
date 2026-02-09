@@ -125,10 +125,7 @@ async def update_user(
 async def _get_first_super_admin_id() -> str | None:
     """Return the _id of the first (earliest) super_admin in the DB."""
     users = get_user_collection()
-    cursor = users.find({"role": "super_admin"}).sort("_id", 1).limit(1)
-    async for doc in cursor:
-        return str(doc["_id"])
-    return None
+    return await users.get_first_super_admin_id()
 
 
 # =========================

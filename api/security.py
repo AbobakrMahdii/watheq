@@ -67,7 +67,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 # Admin OR Super Admin
 # =========================
 def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
-    if user.get("role") not in ["admin", "super_admin"]:
+    if user.get("role") not in ["admin", "super_admin", "admin_manager"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admins only",
@@ -78,7 +78,7 @@ def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
 # Super Admin only
 # =========================
 def get_current_super_admin(user: dict = Depends(get_current_user)) -> dict:
-    if user.get("role") != "super_admin":
+    if user.get("role") not in ["super_admin", "admin_manager"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admins only",

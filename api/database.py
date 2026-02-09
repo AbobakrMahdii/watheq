@@ -254,6 +254,19 @@ class UsersCollection:
 
         return _iter()
 
+    async def get_first_super_admin_id(self) -> Optional[str]:
+        await self._ensure_connected()
+        row = await self.db.fetch_one(
+            """
+            SELECT id as _id
+            FROM users
+            WHERE role = 'super_admin' AND (deleted_at IS NULL)
+            ORDER BY id ASC
+            LIMIT 1
+            """
+        )
+        return str(row["_id"]) if row else None
+
 
 # Instance
 users = UsersCollection(database)
@@ -736,8 +749,16 @@ class VerificationsCollection:
             where_clauses.append("v.created_at <= :date_to")
             values["date_to"] = filters["date_to"]
         if filters.get("search"):
-            where_clauses.append("(u.name LIKE :search OR u.email LIKE :search)")
+            where_clauses.append(
+                "(u.name LIKE :search OR u.email LIKE :search OR v.current_stage LIKE :search)"
+            )
             values["search"] = f"%{filters['search']}%"
+        if filters.get("user_name"):
+            where_clauses.append("u.name LIKE :user_name")
+            values["user_name"] = f"%{filters['user_name']}%"
+        if filters.get("operation_type"):
+            where_clauses.append("v.current_stage = :operation_type")
+            values["operation_type"] = filters["operation_type"]
 
         where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
         sort_by = filters.get("sort_by", "created_at")
@@ -762,6 +783,73 @@ class VerificationsCollection:
         rows = await self.db.fetch_all(q, values=values)
         return [_normalize_verification_row(row) for row in rows]
 
+    async def list_for_export(
+        self, limit: int, offset: int, **filters
+    ) -> list[Dict[str, Any]]:
+        """Export verifications with optional filters, including latest admin note."""
+        await self._ensure_connected()
+        where_clauses = []
+        values: Dict[str, Any] = {"limit": limit, "offset": offset}
+
+        if filters.get("status"):
+            where_clauses.append("v.status = :status")
+            values["status"] = filters["status"]
+        if filters.get("document_type_id"):
+            where_clauses.append("v.document_type_id = :document_type_id")
+            values["document_type_id"] = filters["document_type_id"]
+        if filters.get("user_id"):
+            where_clauses.append("v.user_id = :user_id")
+            values["user_id"] = filters["user_id"]
+        if filters.get("date_from"):
+            where_clauses.append("v.created_at >= :date_from")
+            values["date_from"] = filters["date_from"]
+        if filters.get("date_to"):
+            where_clauses.append("v.created_at <= :date_to")
+            values["date_to"] = filters["date_to"]
+        if filters.get("search"):
+            where_clauses.append(
+                "(u.name LIKE :search OR u.email LIKE :search OR v.current_stage LIKE :search)"
+            )
+            values["search"] = f"%{filters['search']}%"
+        if filters.get("user_name"):
+            where_clauses.append("u.name LIKE :user_name")
+            values["user_name"] = f"%{filters['user_name']}%"
+        if filters.get("operation_type"):
+            where_clauses.append("v.current_stage = :operation_type")
+            values["operation_type"] = filters["operation_type"]
+
+        where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        q = f"""
+            SELECT
+                v.id,
+                v.user_id,
+                u.name AS user_name,
+                u.email AS user_email,
+                v.current_stage,
+                v.status,
+                v.created_at,
+                n.note_text AS supervisor_note
+            FROM verifications v
+            LEFT JOIN users u ON v.user_id = u.id
+            LEFT JOIN (
+                SELECT vn1.verification_id, vn1.note_text
+                FROM verification_notes vn1
+                INNER JOIN (
+                    SELECT verification_id, MAX(created_at) AS max_created
+                    FROM verification_notes
+                    GROUP BY verification_id
+                ) vn2
+                ON vn1.verification_id = vn2.verification_id
+                AND vn1.created_at = vn2.max_created
+            ) n ON n.verification_id = v.id
+            {where_sql}
+            ORDER BY v.created_at DESC
+            LIMIT :limit OFFSET :offset
+        """
+        rows = await self.db.fetch_all(q, values=values)
+        return [dict(row) for row in rows]
+
     async def count_filtered(self, **filters) -> int:
         """Count verifications with optional filters."""
         await self._ensure_connected()
@@ -784,8 +872,16 @@ class VerificationsCollection:
             where_clauses.append("v.created_at <= :date_to")
             values["date_to"] = filters["date_to"]
         if filters.get("search"):
-            where_clauses.append("(u.name LIKE :search OR u.email LIKE :search)")
+            where_clauses.append(
+                "(u.name LIKE :search OR u.email LIKE :search OR v.current_stage LIKE :search)"
+            )
             values["search"] = f"%{filters['search']}%"
+        if filters.get("user_name"):
+            where_clauses.append("u.name LIKE :user_name")
+            values["user_name"] = f"%{filters['user_name']}%"
+        if filters.get("operation_type"):
+            where_clauses.append("v.current_stage = :operation_type")
+            values["operation_type"] = filters["operation_type"]
 
         where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
         q = f"""
@@ -1059,6 +1155,21 @@ class VerificationNotesCollection:
             values={"vid": verification_id},
         )
         return [dict(row) for row in rows]
+
+    async def get_latest_by_verification(self, verification_id: int) -> Optional[Dict[str, Any]]:
+        await self._ensure_connected()
+        row = await self.db.fetch_one(
+            """
+            SELECT vn.*, u.name AS admin_name, u.email AS admin_email
+            FROM verification_notes vn
+            LEFT JOIN users u ON vn.admin_id = u.id
+            WHERE vn.verification_id = :vid
+            ORDER BY vn.created_at DESC
+            LIMIT 1
+            """,
+            values={"vid": verification_id},
+        )
+        return dict(row) if row else None
 
 
 _verification_notes_collection: Optional[VerificationNotesCollection] = None
