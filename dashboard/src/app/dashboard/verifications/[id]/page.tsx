@@ -174,9 +174,9 @@ export default function VerificationDetailPage() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("\u062a\u0645 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+      toast.success("تم تنزيل التقرير");
     } catch (e: any) {
-      toast.error(e?.message || "\u062a\u0639\u0630\u0631 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+      toast.error(e?.message || "تعذر تنزيل التقرير");
     } finally {
       setReporting(false);
     }
@@ -315,7 +315,7 @@ export default function VerificationDetailPage() {
         <h1 className="text-xl font-semibold">تحقق #{verification.id}</h1>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={downloadReport} disabled={reporting}>
-            {reporting ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..." : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631 (CSV)"}
+            {reporting ? "جاري التنزيل..." : "تنزيل التقرير (CSV)"}
           </Button>
           <Badge
           variant={

@@ -103,7 +103,7 @@ export default function VerificationsPage() {
     } catch (e: any) {
       toast.error(
         e?.message ||
-          "\u062a\u0639\u0630\u0631 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631",
+          "تعذر تنزيل التقرير",
       );
     } finally {
       setLoading(false);
@@ -160,7 +160,7 @@ export default function VerificationsPage() {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      toast.success("\u062a\u0645 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+      toast.success("تم تنزيل التقرير");
     } catch (e: any) {
       toast.error(e?.message || "Export failed");
     } finally {
@@ -212,17 +212,17 @@ export default function VerificationsPage() {
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{"\u0627\u0644\u062a\u062d\u0642\u0642\u0627\u062a"}</h1>
+        <h1 className="text-xl font-semibold">التحققات</h1>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={exportData} disabled={exporting}>
             {exporting
-              ? "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u0635\u062f\u064a\u0631..."
-              : "\u062a\u0635\u062f\u064a\u0631 CSV"}
+              ? "جارٍ التصدير..."
+              : "تصدير CSV"}
           </Button>
           <Button size="sm" variant="outline" onClick={load} disabled={loading}>
             {loading
-              ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u0645\u064a\u0644..."
-              : "\u062a\u062d\u062f\u064a\u062b"}
+              ? "جاري التحميل..."
+              : "تحديث"}
           </Button>
         </div>
       </div>
@@ -230,7 +230,7 @@ export default function VerificationsPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <Input
-          placeholder="\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0627\u0644\u0628\u0631\u064a\u062f \u0623\u0648 \u0627\u0644\u0648\u062d\u062f\u0629..."
+          placeholder="بحث بالاسم أو البريد أو الوحدة..."
           className="w-64"
           value={searchInput}
           onChange={(e) => {
@@ -238,7 +238,7 @@ export default function VerificationsPage() {
           }}
         />
         <Input
-          placeholder="\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645"
+          placeholder="اسم المستخدم"
           className="w-48"
           value={userName}
           onChange={(e) => {
@@ -254,10 +254,10 @@ export default function VerificationsPage() {
           }}
         >
           <SelectTrigger className="w-52">
-            <SelectValue placeholder="\u0646\u0648\u0639 \u0627\u0644\u0639\u0645\u0644\u064a\u0629" />
+            <SelectValue placeholder="نوع العملية" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">\u0627\u0644\u0643\u0644</SelectItem>
+            <SelectItem value="ALL">الكل</SelectItem>
             {operationOptions.map((s) => (
               <SelectItem key={s} value={s}>
                 {STAGE_LABELS[s] || s}
@@ -273,10 +273,10 @@ export default function VerificationsPage() {
           }}
         >
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="\u0627\u0644\u062d\u0627\u0644\u0629" />
+            <SelectValue placeholder="الحالة" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">\u0627\u0644\u0643\u0644</SelectItem>
+            <SelectItem value="ALL">الكل</SelectItem>
             {STATUS_OPTIONS.filter(Boolean).map((s) => (
               <SelectItem key={s} value={s}>
                 {STATUS_LABELS[s] || s}
@@ -303,7 +303,7 @@ export default function VerificationsPage() {
           }}
         />
         <Button variant="outline" onClick={resetFilters}>
-          {"\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637 \u0627\u0644\u0641\u0644\u0627\u062a\u0631"}
+          إعادة ضبط الفلاتر
         </Button>
       </div>
 
@@ -399,7 +399,7 @@ export default function VerificationsPage() {
                       <div className="flex items-center gap-2">
                         <Link href={`/dashboard/verifications/${v.id}`}>
                           <Button size="sm" variant="ghost">
-                            ???
+                            عرض
                           </Button>
                         </Link>
                         <Button
@@ -409,8 +409,8 @@ export default function VerificationsPage() {
                           disabled={reportingId === v.id}
                         >
                           {reportingId === v.id
-                            ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..."
-                            : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631"}
+                            ? "جاري التنزيل..."
+                            : "تنزيل التقرير"}
                         </Button>
                       </div>
                     </TableCell>
