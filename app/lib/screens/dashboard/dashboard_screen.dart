@@ -63,10 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 12),
             const Text(
               'تأكيد الخروج',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -74,10 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: EdgeInsets.only(top: 8),
           child: Text(
             'هل أنت متأكد أنك تريد الخروج من التطبيق؟',
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.5,
-            ),
+            style: TextStyle(fontSize: 15, height: 1.5),
           ),
         ),
         actions: [
@@ -92,10 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             child: const Text(
               'إلغاء',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
           ),
           ElevatedButton.icon(
@@ -103,10 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.exit_to_app, size: 18),
             label: const Text(
               'خروج',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange.shade600,

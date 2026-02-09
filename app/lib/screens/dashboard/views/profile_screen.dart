@@ -67,10 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(width: 12),
             const Text(
               'تسجيل الخروج',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -78,10 +75,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: EdgeInsets.only(top: 8),
           child: Text(
             'هل أنت متأكد من أنك تريد تسجيل الخروج من التطبيق؟',
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.5,
-            ),
+            style: TextStyle(fontSize: 15, height: 1.5),
           ),
         ),
         actions: [
@@ -96,10 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: const Text(
               'إلغاء',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
           ),
           ElevatedButton.icon(
@@ -107,10 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: const Icon(Icons.logout, size: 18),
             label: const Text(
               'تسجيل الخروج',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade600,
