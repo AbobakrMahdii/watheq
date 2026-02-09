@@ -15,6 +15,7 @@ RUN wget -q https://www.multichain.com/download/multichain-2.3.3.tar.gz -O /tmp/
 RUN mkdir -p /root/.multichain
 
 COPY entrypoint-multichain.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # 4402 = JSON-RPC,  4403 = peer-to-peer

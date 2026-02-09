@@ -8,7 +8,7 @@ RPC_PASS="${RPC_PASS:-watheqrpcpass}"
 
 CHAIN_DIR="/root/.multichain/${CHAIN_NAME}"
 
-# ── Create chain on first run ─────────────────────────────────────
+# â”€â”€ Create chain on first run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if [ ! -f "${CHAIN_DIR}/params.dat" ]; then
     echo "[multichain] Creating blockchain '${CHAIN_NAME}'..."
     multichain-util create "${CHAIN_NAME}" \
@@ -25,7 +25,7 @@ EOF
     echo "[multichain] Chain created. RPC on port ${RPC_PORT}."
 fi
 
-# ── Start daemon in foreground mode ───────────────────────────────
+# â”€â”€ Start daemon in foreground mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 echo "[multichain] Starting multichaind (foreground)..."
 multichaind "${CHAIN_NAME}" -printtoconsole \
     -rpcuser="${RPC_USER}" \
@@ -49,7 +49,7 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# ── Ensure 'documents' stream exists & subscribed ─────────────────
+# â”€â”€ Ensure 'documents' stream exists & subscribed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 multichain-cli "${CHAIN_NAME}" \
     -rpcuser="${RPC_USER}" \
     -rpcpassword="${RPC_PASS}" \
