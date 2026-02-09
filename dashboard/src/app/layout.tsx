@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Minimal Dashboard",
+  title: "Watheeq",
   description: "A minimal dashboard scaffold with a single homepage",
 };
 

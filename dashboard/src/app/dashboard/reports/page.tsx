@@ -30,7 +30,12 @@ type Analytics = {
   avg_processing_time_sec?: number;
 };
 
-const PIE_COLORS = ["#22c55e", "#ef4444", "#3b82f6", "#f59e0b", "#8b5cf6"];
+const STATUS_COLORS: Record<string, string> = {
+  SUCCESS: "#22c55e", // green
+  FAILED: "#ef4444", // red
+  PENDING: "#3b82f6", // blue
+  RUNNING: "#f59e0b", // amber
+};
 const STATUS_AR: Record<string, string> = {
   SUCCESS: "ناجح",
   FAILED: "فشل",
@@ -112,6 +117,7 @@ export default function ReportsPage() {
     ? Object.entries(data.status_breakdown).map(([k, v]) => ({
         name: STATUS_AR[k] || k,
         value: v,
+        color: STATUS_COLORS[k] || "#94a3b8",
       }))
     : [];
 
@@ -208,8 +214,8 @@ export default function ReportsPage() {
                     dataKey="value"
                     label={({ name, value }) => `${name} (${value})`}
                   >
-                    {statusPie.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    {statusPie.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip />

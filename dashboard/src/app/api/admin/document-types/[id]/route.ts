@@ -3,11 +3,11 @@ import { getBackendBaseUrl, getBearerTokenFromCookies } from "@/lib/backend";
 
 const backendBaseUrl = getBackendBaseUrl();
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const token = await getBearerTokenFromCookies();
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const { id } = params;
+  const { id } = await params;
 
   const upstream = await fetch(`${backendBaseUrl}/api/admin/document-types/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -22,16 +22,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
   return NextResponse.json(data);
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const token = await getBearerTokenFromCookies();
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const { id } = params;
+  const { id } = await params;
   const body = await request.json();
 
   const upstream = await fetch(`${backendBaseUrl}/api/admin/document-types/${id}`, {
     method: "PUT",
-    headers: { 
+    headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
@@ -47,11 +47,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   return NextResponse.json(data, { status: upstream.status });
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const token = await getBearerTokenFromCookies();
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const { id } = params;
+  const { id } = await params;
 
   const upstream = await fetch(`${backendBaseUrl}/api/admin/document-types/${id}`, {
     method: "DELETE",

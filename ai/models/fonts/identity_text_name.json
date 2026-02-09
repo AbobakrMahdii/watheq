@@ -1,6 +1,6 @@
 {
-  "stroke_width_mean": 8.689005851745605,
-  "stroke_width_std": 7.9507832527160645,
+  "stroke_width_mean": 8.689006805419922,
+  "stroke_width_std": 7.950782775878906,
   "stroke_width_min": 1.0,
   "stroke_width_max": 46.0,
   "char_height_mean": 110.33333333333333,
@@ -9,7 +9,7 @@
   "inter_char_spacing_std": 85.20693764138119,
   "line_spacing_mean": 0.0,
   "ink_density": 0.13195389634238555,
-  "edge_sharpness": 6.166929149148247,
+  "edge_sharpness": 6.166929149148248,
   "text_uniformity": 0.5117429935450626,
   "gray_histogram": [
     0.00014582928270101547,

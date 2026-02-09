@@ -534,6 +534,42 @@ async def startup_event():
     except Exception:
         pass
 
+    # ── Recover stuck verifications (PENDING / RUNNING) from a previous crash ──
+    # When the server stops (or crashes) while background tasks are processing
+    # verifications, those records stay in PENDING or RUNNING forever. Mark them
+    # as FAILED so users see the result and can retry.
+    try:
+        stuck = await db_module.database.fetch_one(
+            "SELECT COUNT(*) AS cnt FROM verifications WHERE status IN ('PENDING', 'RUNNING')"
+        )
+        stuck_count = stuck["cnt"] if stuck else 0
+        if stuck_count > 0:
+            await db_module.database.execute(
+                """
+                UPDATE verifications
+                   SET status       = 'FAILED',
+                       error_message = 'توقف الخادم أثناء التحقق — يرجى إعادة المحاولة',
+                       end_time      = NOW()
+                 WHERE status IN ('PENDING', 'RUNNING')
+                """
+            )
+            # Also mark any RUNNING steps as FAILED so the UI pipeline view is consistent
+            await db_module.database.execute(
+                """
+                UPDATE verification_steps
+                   SET status        = 'FAILED',
+                       error_message = 'Server restarted',
+                       end_time      = NOW()
+                 WHERE status = 'RUNNING'
+                """
+            )
+            logger.warning(
+                "Recovered %d stuck verification(s) from previous server session",
+                stuck_count,
+            )
+    except Exception:
+        logger.exception("Failed to recover stuck verifications")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():

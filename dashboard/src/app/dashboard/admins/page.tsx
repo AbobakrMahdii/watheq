@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
+import { SortableHeader } from "@/components/sortable-header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useSortState } from "@/hooks/use-sort-state";
+import { sortLocally } from "@/lib/sort-utils";
 
 type User = {
   _id: string;
@@ -33,6 +37,8 @@ export default function AdminsPage() {
   const [editUsername, setEditUsername] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPassword, setEditPassword] = useState("");
+
+  const { sortBy, sortOrder, toggleSort } = useSortState("name", "asc");
 
   function resetForm() {
     setFormName("");
@@ -314,15 +320,47 @@ export default function AdminsPage() {
           <thead>
             <tr>
               <th className="py-1">ID</th>
-              <th className="py-1">Name</th>
-              <th className="py-1">Username</th>
-              <th className="py-1">Email</th>
-              <th className="py-1">Role</th>
+              <th className="py-1">
+                <SortableHeader
+                  label="Name"
+                  field="name"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={toggleSort}
+                />
+              </th>
+              <th className="py-1">
+                <SortableHeader
+                  label="Username"
+                  field="username"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={toggleSort}
+                />
+              </th>
+              <th className="py-1">
+                <SortableHeader
+                  label="Email"
+                  field="email"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={toggleSort}
+                />
+              </th>
+              <th className="py-1">
+                <SortableHeader
+                  label="Role"
+                  field="role"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={toggleSort}
+                />
+              </th>
               <th className="py-1">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {admins.map((u) => {
+            {sortLocally(admins, sortBy, sortOrder).map((u) => {
               const isSelf = u._id === meId;
               const isTargetSuperAdmin = u.role === "super_admin";
               const isTargetFirstSA = u.is_first_super_admin;

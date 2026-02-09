@@ -494,19 +494,48 @@ def document_face_extraction(cropped_path: Path, output_path: Path) -> dict[str,
 # Models ordered by robustness for cross-domain (ID-card vs live-selfie) matching.
 # ArcFace  – additive angular margin + ResNet-100 → most robust to quality gap.
 # Facenet512 – 512-dim embeddings → more expressive than Facenet-128.
-# VGG-Face – deep VGG-16 backbone → good general fallback.
-_VERIFY_MODELS = ["ArcFace", "Facenet512", "VGG-Face"]
+# VGG-Face dropped: consistently worst performer in logs (27-28% similarity).
+_VERIFY_MODELS = ["ArcFace", "Facenet512"]
+
+# Explicit acceptance threshold (percent).  Cross-domain ID-card vs live-selfie
+# inherently yields lower similarity than selfie-vs-selfie due to printing
+# artefacts, lighting differences, age gap, and resolution gap.  60 % is the
+# industry-standard sweet-spot: high enough to reject impostors, low enough to
+# accept genuine cross-domain matches.
+_ACCEPT_SIMILARITY_PCT = 60.0
+
+
+def _preprocess_id_face(img: np.ndarray) -> np.ndarray:
+    """Enhance a document-face crop for better embedding quality.
+
+    ID-card photos are often low-contrast and washed-out from scanning /
+    photographing.  CLAHE on the L channel of LAB space equalises contrast
+    without colour distortion, and mild denoising reduces scan artefacts.
+    """
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l_ch, a_ch, b_ch = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_ch = clahe.apply(l_ch)
+    enhanced = cv2.merge([l_ch, a_ch, b_ch])
+    enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+    enhanced = cv2.fastNlMeansDenoisingColored(enhanced, None, 5, 5, 7, 21)
+    logger.info("[PREPROCESS] CLAHE + denoise applied to document face")
+    return enhanced
 
 
 def _upscale_if_small(img: np.ndarray, label: str = "") -> np.ndarray:
-    """Upscale image if too small for reliable face detection / recognition."""
+    """Upscale image if too small for reliable face detection / recognition.
+
+    Uses LANCZOS4 interpolation (sharper than CUBIC, fewer artefacts on
+    small face crops) and targets at least 400 px on the shortest side.
+    """
     h, w = img.shape[:2]
     min_dim = min(h, w)
-    if min_dim < 300:
-        scale = 3 if min_dim < 150 else 2
-        img = cv2.resize(img, (w * scale, h * scale), interpolation=cv2.INTER_CUBIC)
+    if min_dim < 400:
+        scale = max(2, -(-400 // min_dim))  # ceiling division
+        img = cv2.resize(img, (w * scale, h * scale), interpolation=cv2.INTER_LANCZOS4)
         logger.info(
-            "[UPSCALE:%s] %dx → %dx%d (was %dx%d, min_dim=%d)",
+            "[UPSCALE:%s] %dx → %dx%d (was %dx%d, min_dim=%d, LANCZOS4)",
             label,
             scale,
             img.shape[1],
@@ -542,7 +571,7 @@ def _try_verify(
             img2_path=img2,
             model_name=model,
             detector_backend="retinaface",
-            enforce_detection=True,
+            enforce_detection=False,  # critical for low-res ID-card faces
             distance_metric="cosine",
         )
         distance = float(result.get("distance", 1.0))
@@ -579,16 +608,16 @@ def face_matching(
 ) -> dict[str, Any]:
     """Compare a document face against the selfie.
 
-    Uses ``DeepFace.verify()`` with a cascade of recognition models
-    (ArcFace → Facenet512 → VGG-Face) to overcome the **domain shift**
-    between low-resolution printed ID-card photos and live selfie images.
+    Uses ``DeepFace.verify()`` with ArcFace → Facenet512 to overcome the
+    **domain shift** between low-resolution printed ID-card photos and
+    live selfie images.
 
-    ArcFace (additive angular margin + ResNet-100) is the gold standard
-    for cross-domain face verification and handles the quality gap that
-    Facenet cannot bridge.
+    Acceptance is based on an **explicit similarity threshold**
+    (``_ACCEPT_SIMILARITY_PCT``) rather than DeepFace's per-model
+    ``verified`` flag, which was effectively only ~32 % for ArcFace.
 
-    Each model is tried in order. If any model says *verified*, the
-    result is accepted immediately.
+    The document face is pre-processed with CLAHE + denoising to
+    compensate for scan / photo artefacts.
     """
     logger.info("======================================================")
     logger.info("[FACE_MATCH] === Starting face matching (multi-model) ===")
@@ -629,6 +658,9 @@ def face_matching(
         img_selfie.shape[0],
     )
 
+    # Pre-process document face: CLAHE contrast enhancement + denoise
+    img_doc = _preprocess_id_face(img_doc)
+
     # Upscale small images for better face detection & recognition
     img_doc_up = _upscale_if_small(img_doc, "doc")
     img_selfie_up = _upscale_if_small(img_selfie, "selfie")
@@ -638,7 +670,10 @@ def face_matching(
     accepted: bool = False
 
     # ── Pass 1: extracted document face vs selfie ──────────────────
-    logger.info("[FACE_MATCH] --- Pass 1: doc_face vs selfie ---")
+    logger.info(
+        "[FACE_MATCH] --- Pass 1: doc_face vs selfie (threshold=%.1f%%) ---",
+        _ACCEPT_SIMILARITY_PCT,
+    )
     for model in _VERIFY_MODELS:
         vr = _try_verify(img_doc_up, img_selfie_up, model, "pass1")
         if vr is None:
@@ -646,14 +681,15 @@ def face_matching(
         if vr["similarity_pct"] > best_similarity:
             best_similarity = vr["similarity_pct"]
             best_model = vr["model"]
-        if vr["verified"]:
+        if vr["similarity_pct"] >= _ACCEPT_SIMILARITY_PCT:
             accepted = True
             best_similarity = vr["similarity_pct"]
             best_model = vr["model"]
             logger.info(
-                "[FACE_MATCH] ✓ ACCEPTED by %s at %.2f%%",
+                "[FACE_MATCH] ✓ ACCEPTED by %s at %.2f%% (>= %.1f%%)",
                 model,
                 vr["similarity_pct"],
+                _ACCEPT_SIMILARITY_PCT,
             )
             break
 
@@ -682,14 +718,15 @@ def face_matching(
                     if vr["similarity_pct"] > best_similarity:
                         best_similarity = vr["similarity_pct"]
                         best_model = vr["model"]
-                    if vr["verified"]:
+                    if vr["similarity_pct"] >= _ACCEPT_SIMILARITY_PCT:
                         accepted = True
                         best_similarity = vr["similarity_pct"]
                         best_model = vr["model"]
                         logger.info(
-                            "[FACE_MATCH] ✓ ACCEPTED by %s at %.2f%% (pass2)",
+                            "[FACE_MATCH] ✓ ACCEPTED by %s at %.2f%% (pass2, >= %.1f%%)",
                             model,
                             vr["similarity_pct"],
+                            _ACCEPT_SIMILARITY_PCT,
                         )
                         break
 
@@ -708,12 +745,10 @@ def face_matching(
         )
     logger.info("======================================================")
 
-    # For display: the threshold is the model's own cosine threshold → %
-    display_threshold = 32.0  # ArcFace cosine 0.68 → (1-0.68)*100
     return {
         "similarity_percent": best_similarity,
         "accepted": accepted,
-        "accept_threshold_percent": display_threshold,
+        "accept_threshold_percent": _ACCEPT_SIMILARITY_PCT,
     }
 
 

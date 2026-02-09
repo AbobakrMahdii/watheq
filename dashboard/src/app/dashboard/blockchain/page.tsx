@@ -64,7 +64,7 @@ export default function BlockchainPage() {
   // ─── Dialog controls
   const [dialog, setDialog] = useState<string | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
-  const [dialogResult, setDialogResult] = useState<unknown>(null);
+  const [dialogResult, setDialogResult] = useState<any>(null);
 
   // ─── Form inputs
   const [inputVal, setInputVal] = useState("");

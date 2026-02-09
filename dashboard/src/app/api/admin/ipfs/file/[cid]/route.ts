@@ -3,11 +3,11 @@ import { getBackendBaseUrl, getBearerTokenFromCookies } from "@/lib/backend";
 
 const backendBaseUrl = getBackendBaseUrl();
 
-export async function GET(_request: Request, { params }: { params: { cid: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ cid: string }> }) {
   const token = await getBearerTokenFromCookies();
   if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-  const cid = params?.cid;
+  const { cid } = await params;
   if (!cid) return NextResponse.json({ message: "Missing cid" }, { status: 400 });
 
   try {

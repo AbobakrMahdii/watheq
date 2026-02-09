@@ -1,7 +1,9 @@
+import '../services/connection_config_service.dart';
+
 class AppConfig {
   const AppConfig._();
 
-  // Backend base URL reachable من الجهاز (استخدم عنوان الشبكة Wi-Fi)
-  // تأكد أن الـ Backend يعمل على 0.0.0.0:8012
-  static const String apiBaseUrl = 'http://192.168.8.36:8012';
+  /// Dynamic backend base URL constructed from cached IP & port.
+  /// Updated at runtime via the login screen connection settings.
+  static String get apiBaseUrl => ConnectionConfigService.instance.baseUrl;
 }

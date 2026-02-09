@@ -10,10 +10,8 @@ pwd_context = CryptContext(
     deprecated="auto",
 )
 
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/auth/login",
-    auto_error=False
-)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
 
 # =========================
 # Password helpers
@@ -21,18 +19,24 @@ oauth2_scheme = OAuth2PasswordBearer(
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
+
 def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
+
 
 # =========================
 # JWT helpers
 # =========================
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     payload = data.copy()
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    if expires_delta:
+        payload["exp"] = datetime.now(timezone.utc) + expires_delta
+    else:
+        payload["exp"] = datetime.now(timezone.utc) + timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
 
 def decode_token(token: str) -> dict:
     try:
@@ -42,6 +46,7 @@ def decode_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
+
 
 # =========================
 # Current user
@@ -63,6 +68,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 
     return payload
 
+
 # =========================
 # Admin OR Super Admin
 # =========================
@@ -73,6 +79,7 @@ def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
             detail="Admins only",
         )
     return user
+
 
 # =========================
 # Super Admin only
