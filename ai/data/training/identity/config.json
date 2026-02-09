@@ -2,7 +2,7 @@
   "doc_type": "identity",
   "version": "3.0",
   "model": "ElementClassifier (EfficientNet-B0 binary)",
-  "trained_at": "2026-02-09T03:17:31.159007",
+  "trained_at": "2026-02-09T06:26:47.016388",
   "layout": {
     "logo_main": {
       "roi": {
@@ -90,7 +90,7 @@
   "augmentation_results": {
     "barcode": {
       "status": "error",
-      "message": "OpenCV(4.12.0) D:\\a\\opencv-python\\opencv-python\\opencv\\modules\\imgcodecs\\src\\loadsave.cpp:1266: error: (-215:Assertion failed) !buf.empty() in function 'cv::imdecode_'\n",
+      "message": "OpenCV(4.13.0) D:\\a\\opencv-python\\opencv-python\\opencv\\modules\\imgcodecs\\src\\loadsave.cpp:1310: error: (-215:Assertion failed) !buf.empty() in function 'cv::imdecode_'\n",
       "element": "barcode"
     }
   },
@@ -100,21 +100,21 @@
       "message": "identity_logo_main.pt already exists",
       "class_name": "logo_main",
       "ref_stem": "logo",
-      "weight_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\models\\weights\\identity_logo_main.pt"
+      "weight_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\weights\\identity_logo_main.pt"
     },
     "stamp": {
       "status": "skipped",
       "message": "identity_stamp.pt already exists",
       "class_name": "stamp",
       "ref_stem": "seal",
-      "weight_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\models\\weights\\identity_stamp.pt"
+      "weight_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\weights\\identity_stamp.pt"
     },
     "photo_primary": {
       "status": "skipped",
       "message": "identity_photo_primary.pt already exists",
       "class_name": "photo_primary",
       "ref_stem": "full",
-      "weight_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\models\\weights\\identity_photo_primary.pt"
+      "weight_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\weights\\identity_photo_primary.pt"
     },
     "barcode": {
       "status": "error",
@@ -126,16 +126,16 @@
     "text_name": {
       "status": "success",
       "class_name": "text_name",
-      "profile_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\models\\fonts\\identity_text_name.json",
+      "profile_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\fonts\\identity_text_name.json",
       "ink_density": 0.13195389634238555,
-      "stroke_width": 8.689005851745605
+      "stroke_width": 8.689006805419922
     },
     "text_national_id": {
       "status": "success",
       "class_name": "text_national_id",
-      "profile_path": "C:\\Users\\sadeq\\Desktop\\watheq_final_clean\\ai\\models\\fonts\\identity_text_national_id.json",
+      "profile_path": "C:\\Users\\Abobakr_Mahdi\\Desktop\\watheq\\ai\\models\\fonts\\identity_text_national_id.json",
       "ink_density": 0.0835940731150312,
-      "stroke_width": 7.093870162963867
+      "stroke_width": 7.093869209289551
     }
   }
 }
