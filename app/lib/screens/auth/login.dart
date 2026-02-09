@@ -131,9 +131,7 @@ class _LoginScreenState extends State<LoginScreen>
                           borderRadius: BorderRadius.circular(
                             AppDimensions.radiusLg,
                           ),
-                          border: Border.all(
-                            color: const Color(0xFFE2E8F0),
-                          ),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.primary.withValues(alpha: 0.08),
@@ -316,9 +314,7 @@ class _LoginScreenState extends State<LoginScreen>
                             decimal: true,
                           ),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'[\d.]'),
-                            ),
+                            FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                           ],
                           style: const TextStyle(
                             fontFamily: 'monospace',
@@ -463,9 +459,7 @@ class _LoginScreenState extends State<LoginScreen>
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(
-                      AppDimensions.radiusSm,
-                    ),
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
                   ),
                   child: Icon(
                     Icons.lock_outline_rounded,
