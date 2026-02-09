@@ -2,6 +2,7 @@ import 'package:app/screens/dashboard/dashboard_screen.dart'
     show DashboardScreen;
 import 'package:flutter/material.dart';
 
+import 'core/services/connection_config_service.dart';
 import 'features/verification/services/notification_service.dart';
 import 'features/verification/services/verification_tracker.dart';
 import 'screens/auth/login.dart';
@@ -12,6 +13,7 @@ import 'ui/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ConnectionConfigService.instance.init();
   await NotificationService.instance.init();
   // Resume tracking any verification that was in progress before the app closed.
   VerificationTracker.instance.resumeIfNeeded();
