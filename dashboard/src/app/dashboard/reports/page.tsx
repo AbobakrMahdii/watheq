@@ -42,6 +42,7 @@ const STATUS_AR: Record<string, string> = {
 export default function ReportsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState<null | "csv" | "pdf">(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -67,6 +68,46 @@ export default function ReportsPage() {
     load();
   }, []);
 
+  function getExportFilename(headerValue: string | null) {
+    if (!headerValue) return null;
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || null;
+  }
+
+  async function downloadExport(format: "csv" | "pdf") {
+    setExporting(format);
+    try {
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      params.set("format", format);
+
+      const res = await fetch(`/api/admin/analytics/export?${params}`, { cache: "no-store" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Failed to export analytics");
+      }
+
+      const blob = await res.blob();
+      const filename =
+        getExportFilename(res.headers.get("content-disposition")) ||
+        `analytics_export_${new Date().toISOString().replace(/[:.]/g, "-")}.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("تم تنزيل التصدير");
+    } catch (e: any) {
+      toast.error(e?.message || "تعذر تنزيل التصدير");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   const statusPie = data?.status_breakdown
     ? Object.entries(data.status_breakdown).map(([k, v]) => ({
         name: STATUS_AR[k] || k,
@@ -83,6 +124,14 @@ export default function ReportsPage() {
     <div className="max-w-5xl space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">التقارير والإحصائيات</h1>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => downloadExport("csv")} disabled={exporting === "csv"}>
+            {exporting === "csv" ? "Exporting..." : "Export CSV"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => downloadExport("pdf")} disabled={exporting === "pdf"}>
+            {exporting === "pdf" ? "Exporting..." : "Export PDF"}
+          </Button>
+        </div>
       </div>
 
       {/* Date Filter */}

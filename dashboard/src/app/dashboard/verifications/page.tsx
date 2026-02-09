@@ -63,7 +63,6 @@ export default function VerificationsPage() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [reportingId, setReportingId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -167,34 +166,6 @@ export default function VerificationsPage() {
     setPage(1);
   }
 
-  async function downloadReport(id: number) {
-    setReportingId(id);
-    try {
-      const res = await fetch(`/api/admin/verifications/${id}/report?format=pdf`);
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json?.message || "Failed to download report");
-      }
-      const blob = await res.blob();
-      const filename =
-        getExportFilename(res.headers.get("content-disposition")) ||
-        `verification_${id}_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`;
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success("تم تنزيل التقرير");
-    } catch (e: any) {
-      toast.error(e?.message || "تعذر تنزيل التقرير");
-    } finally {
-      setReportingId(null);
-    }
-  }
-
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
   const operationOptions = Object.keys(STAGE_LABELS);
 
@@ -204,7 +175,7 @@ export default function VerificationsPage() {
         <h1 className="text-xl font-semibold">{"\u0627\u0644\u062a\u062d\u0642\u0642\u0627\u062a"}</h1>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={exportData} disabled={exporting}>
-            {exporting ? "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u0635\u062f\u064a\u0631..." : "\u062a\u0635\u062f\u064a\u0631 CSV"}
+            {exporting ? "\u062c\u0627\u0631\u064d \u062a\u0635\u062f\u064a\u0631 \u0627\u0644\u0643\u0644..." : "\u062a\u0635\u062f\u064a\u0631 \u0627\u0644\u0643\u0644 (CSV)"}
           </Button>
           <Button size="sm" variant="outline" onClick={load} disabled={loading}>
             {loading ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u0645\u064a\u0644..." : "\u062a\u062d\u062f\u064a\u062b"}
@@ -337,21 +308,11 @@ export default function VerificationsPage() {
                       {v.created_at ? new Date(v.created_at).toLocaleDateString("ar-YE") : "—"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Link href={`/dashboard/verifications/${v.id}`}>
-                          <Button size="sm" variant="ghost">
-                            ???
-                          </Button>
-                        </Link>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => downloadReport(v.id)}
-                          disabled={reportingId === v.id}
-                        >
-                          {reportingId === v.id ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..." : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631"}
+                      <Link href={`/dashboard/verifications/${v.id}`}>
+                        <Button size="sm" variant="ghost">
+                          {"\u0639\u0631\u0636"}
                         </Button>
-                      </div>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}

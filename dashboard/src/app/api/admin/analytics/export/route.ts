@@ -1,28 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendBaseUrl, getBearerTokenFromCookies } from "@/lib/backend";
 
-type RouteCtx = { params: Promise<{ id: string }> };
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-/** GET report for a single verification */
-export async function GET(req: NextRequest, ctx: RouteCtx) {
+/** GET export analytics file */
+export async function GET(req: NextRequest) {
   const token = await getBearerTokenFromCookies();
   if (!token) return NextResponse.json({ message: "Missing token" }, { status: 401 });
 
-  const { id } = await ctx.params;
-  const upstream = await fetch(
-    `${getBackendBaseUrl()}/api/admin/verifications/${id}/report${req.nextUrl.search}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "text/csv,application/pdf",
-      },
-      cache: "no-store",
-    }
-  );
+  const upstream = await fetch(`${getBackendBaseUrl()}/api/v1/admin/analytics/export${req.nextUrl.search}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "text/csv,application/pdf",
+    },
+    cache: "no-store",
+  });
 
   if (!upstream.ok) {
     const data = await upstream.json().catch(() => ({}));
