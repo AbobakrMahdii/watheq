@@ -424,6 +424,8 @@ class AuditLogsCollection:
         filters: Dict[str, Any],
         limit: int,
         offset: int,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
     ) -> list[Dict[str, Any]]:
         await self._ensure_connected()
         where_parts = []
@@ -487,7 +489,18 @@ class AuditLogsCollection:
         """
         if where_parts:
             q += " WHERE " + " AND ".join(where_parts)
-        q += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+
+        ALLOWED_AUDIT_SORT_COLS = {
+            "created_at",
+            "user_name",
+            "operation_type",
+            "status",
+            "module",
+            "id",
+        }
+        safe_sort_by = sort_by if sort_by in ALLOWED_AUDIT_SORT_COLS else "created_at"
+        safe_sort_order = "ASC" if str(sort_order).upper() == "ASC" else "DESC"
+        q += f" ORDER BY {safe_sort_by} {safe_sort_order} LIMIT :limit OFFSET :offset"
 
         rows = await self.db.fetch_all(q, values=values)
         return _normalize_audit_rows(rows)
@@ -1094,10 +1107,17 @@ class CitizenRecordsCollection:
         q = f"UPDATE citizen_records SET {', '.join(parts)} WHERE national_id = :nid"
         return await self.db.execute(q, values=values)
 
-    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Dict[str, Any]]:
+    async def list_all(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        sort_by: str = "id",
+        sort_order: str = "DESC",
+    ) -> list[Dict[str, Any]]:
         await self._ensure_connected()
+        # sort_by and sort_order are validated by the caller
         rows = await self.db.fetch_all(
-            "SELECT * FROM citizen_records ORDER BY id DESC LIMIT :limit OFFSET :offset",
+            f"SELECT * FROM citizen_records ORDER BY {sort_by} {sort_order} LIMIT :limit OFFSET :offset",
             values={"limit": limit, "offset": offset},
         )
         return [dict(row) for row in rows]
@@ -1156,7 +1176,9 @@ class VerificationNotesCollection:
         )
         return [dict(row) for row in rows]
 
-    async def get_latest_by_verification(self, verification_id: int) -> Optional[Dict[str, Any]]:
+    async def get_latest_by_verification(
+        self, verification_id: int
+    ) -> Optional[Dict[str, Any]]:
         await self._ensure_connected()
         row = await self.db.fetch_one(
             """

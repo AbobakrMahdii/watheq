@@ -32,6 +32,8 @@ async def list_audit_logs(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     query: Optional[str] = None,
+    sort_by: Optional[str] = Query("created_at"),
+    sort_order: Optional[str] = Query("desc"),
 ):
     collection = get_audit_log_collection()
     filters = {
@@ -45,7 +47,9 @@ async def list_audit_logs(
         "query": query,
     }
     offset = (page - 1) * page_size
-    items = await collection.list(filters, limit=page_size, offset=offset)
+    items = await collection.list(
+        filters, limit=page_size, offset=offset, sort_by=sort_by, sort_order=sort_order
+    )
     total = await collection.count(filters)
 
     return {
@@ -89,34 +93,38 @@ def _build_pdf(items: list[dict[str, Any]]) -> bytes:
     else:
         pdf.set_font("Helvetica", size=9)
 
-    header = " | ".join([
-        "Time",
-        "User",
-        "Role",
-        "Operation",
-        "Status",
-        "Module",
-        "Path",
-        "File",
-        "Size",
-        "Failure",
-    ])
+    header = " | ".join(
+        [
+            "Time",
+            "User",
+            "Role",
+            "Operation",
+            "Status",
+            "Module",
+            "Path",
+            "File",
+            "Size",
+            "Failure",
+        ]
+    )
     pdf.multi_cell(0, 6, header)
     pdf.ln(1)
 
     for item in items:
-        line = " | ".join([
-            _format_value(item.get("created_at")),
-            _format_value(item.get("user_name") or item.get("user_email")),
-            _format_value(item.get("user_role")),
-            _format_value(item.get("operation_type")),
-            _format_value(item.get("status")),
-            _format_value(item.get("module")),
-            _format_value(item.get("path")),
-            _format_value(item.get("file_name")),
-            _format_value(item.get("file_size")),
-            _format_value(item.get("failure_reason")),
-        ])
+        line = " | ".join(
+            [
+                _format_value(item.get("created_at")),
+                _format_value(item.get("user_name") or item.get("user_email")),
+                _format_value(item.get("user_role")),
+                _format_value(item.get("operation_type")),
+                _format_value(item.get("status")),
+                _format_value(item.get("module")),
+                _format_value(item.get("path")),
+                _format_value(item.get("file_name")),
+                _format_value(item.get("file_size")),
+                _format_value(item.get("failure_reason")),
+            ]
+        )
         pdf.multi_cell(0, 5, line)
 
     return pdf.output(dest="S").encode("latin-1", errors="ignore")
@@ -146,22 +154,24 @@ def _build_excel(items: list[dict[str, Any]]) -> bytes:
     ws.append(headers)
 
     for item in items:
-        ws.append([
-            _format_value(item.get("created_at")),
-            _format_value(item.get("user_name")),
-            _format_value(item.get("user_email")),
-            _format_value(item.get("user_role")),
-            _format_value(item.get("operation_type")),
-            _format_value(item.get("status")),
-            _format_value(item.get("module")),
-            _format_value(item.get("path")),
-            _format_value(item.get("method")),
-            _format_value(item.get("file_name")),
-            _format_value(item.get("file_ext")),
-            _format_value(item.get("file_size")),
-            _format_value(item.get("failure_reason")),
-            _format_value(item.get("extra_data")),
-        ])
+        ws.append(
+            [
+                _format_value(item.get("created_at")),
+                _format_value(item.get("user_name")),
+                _format_value(item.get("user_email")),
+                _format_value(item.get("user_role")),
+                _format_value(item.get("operation_type")),
+                _format_value(item.get("status")),
+                _format_value(item.get("module")),
+                _format_value(item.get("path")),
+                _format_value(item.get("method")),
+                _format_value(item.get("file_name")),
+                _format_value(item.get("file_ext")),
+                _format_value(item.get("file_size")),
+                _format_value(item.get("failure_reason")),
+                _format_value(item.get("extra_data")),
+            ]
+        )
 
     stream = BytesIO()
     wb.save(stream)

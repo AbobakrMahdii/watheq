@@ -30,11 +30,28 @@ class CitizenUpdate(BaseModel):
 async def list_citizens(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    sort_by: str = Query("id"),
+    sort_order: str = Query("desc"),
     _admin: dict = Depends(get_current_super_admin),
 ):
-    """List all citizen records (paginated)."""
+    """List all citizen records (paginated, sortable)."""
+    ALLOWED_SORT_COLS = {
+        "id",
+        "national_id",
+        "full_name_ar",
+        "full_name_en",
+        "date_of_birth",
+        "gender",
+        "created_at",
+    }
+    if sort_by not in ALLOWED_SORT_COLS:
+        sort_by = "id"
+    order = "ASC" if sort_order.upper() == "ASC" else "DESC"
+
     col = get_citizen_records_collection()
-    rows = await col.list_all(limit=limit, offset=offset)
+    rows = await col.list_all(
+        limit=limit, offset=offset, sort_by=sort_by, sort_order=order
+    )
     # Serialise date objects to strings for JSON
     for row in rows:
         for key in (
