@@ -107,7 +107,6 @@ def _find_font_path() -> Optional[str]:
 def _build_pdf(items: list[dict[str, Any]]) -> bytes:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     margin = 12
-    content_width = 297 - (margin * 2)  # A4 landscape width in mm
     pdf.set_auto_page_break(auto=True, margin=margin)
     pdf.set_left_margin(margin)
     pdf.set_right_margin(margin)
@@ -120,53 +119,30 @@ def _build_pdf(items: list[dict[str, Any]]) -> bytes:
     else:
         pdf.set_font("Helvetica", size=9)
 
-    header = " | ".join(
-        [
-            "Time",
-            "User",
-            "Role",
-            "Operation",
-            "Status",
-            "Module",
-            "Path",
-            "File",
-            "Size",
-            "Failure",
-        ]
-    )
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(content_width, 6, _safe_pdf_text(header))
-    pdf.ln(1)
+    def _pdf_kv(label: str, value: Any, line_height: float = 5.0, label_width: float = 35.0) -> None:
+        width = pdf.w - pdf.l_margin - pdf.r_margin
+        label_text = (label or "").strip()
+        value_text = _safe_pdf_text(_format_value(value), chunk=30)
+        pdf.cell(label_width, line_height, label_text, ln=0)
+        remaining = max(10.0, width - label_width)
+        pdf.multi_cell(remaining, line_height, value_text)
+
+    pdf.set_font_size(12)
+    pdf.cell(0, 8, "Audit Logs Export", ln=1)
+    pdf.set_font_size(9)
 
     for item in items:
-        line = " | ".join(
-            [
-                _format_value(item.get("created_at")),
-                _format_value(item.get("user_name") or item.get("user_email")),
-                _format_value(item.get("user_role")),
-                _format_value(item.get("operation_type")),
-                _format_value(item.get("status")),
-                _format_value(item.get("module")),
-                _format_value(item.get("path")),
-                _format_value(item.get("file_name")),
-                _format_value(item.get("file_size")),
-                _format_value(item.get("failure_reason")),
-            ]
-        )
-        safe_line = _safe_pdf_text(line, chunk=30)
-        try:
-            pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(content_width, 5, safe_line)
-        except FPDFException:
-            # Fallback: smaller font + stricter wrapping + truncate
-            pdf.set_font(pdf.font_family or "Helvetica", size=8)
-            safe_line = _safe_pdf_text(line, chunk=20)
-            if len(safe_line) > 1000:
-                safe_line = safe_line[:1000] + "..."
-            # Final fallback: write in fixed-size chunks to avoid line-break errors
-            for i in range(0, len(safe_line), 120):
-                pdf.set_x(pdf.l_margin)
-                pdf.multi_cell(content_width, 5, safe_line[i : i + 120])
+        _pdf_kv("Time", item.get("created_at"))
+        _pdf_kv("User", item.get("user_name") or item.get("user_email"))
+        _pdf_kv("Role", item.get("user_role"))
+        _pdf_kv("Operation", item.get("operation_type"))
+        _pdf_kv("Status", item.get("status"))
+        _pdf_kv("Module", item.get("module"))
+        _pdf_kv("Path", item.get("path"))
+        _pdf_kv("File", item.get("file_name"))
+        _pdf_kv("Size", item.get("file_size"))
+        _pdf_kv("Failure", item.get("failure_reason"))
+        pdf.ln(2)
 
     raw = pdf.output(dest="S")
     if isinstance(raw, (bytes, bytearray)):

@@ -212,6 +212,37 @@ def _find_font_path() -> Optional[str]:
 def _build_verification_pdf(payload: dict) -> bytes:
     from fpdf import FPDF
 
+    def _pdf_write_line(text: str, line_height: float = 6.0) -> None:
+        width = pdf.w - pdf.l_margin - pdf.r_margin
+        text = (text or "").replace("\n", " ").strip()
+        if not text:
+            pdf.ln(line_height)
+            return
+        words = text.split(" ")
+        line = ""
+        for word in words:
+            candidate = word if not line else f"{line} {word}"
+            if pdf.get_string_width(candidate) <= width:
+                line = candidate
+                continue
+            if line:
+                pdf.cell(0, line_height, line, ln=1)
+                line = ""
+            if pdf.get_string_width(word) <= width:
+                line = word
+            else:
+                chunk = ""
+                for ch in word:
+                    if pdf.get_string_width(chunk + ch) <= width:
+                        chunk += ch
+                    else:
+                        if chunk:
+                            pdf.cell(0, line_height, chunk, ln=1)
+                        chunk = ch
+                line = chunk
+        if line:
+            pdf.cell(0, line_height, line, ln=1)
+
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
@@ -227,20 +258,21 @@ def _build_verification_pdf(payload: dict) -> bytes:
     pdf.cell(0, 8, "Verification Report", ln=1)
     pdf.set_font_size(11)
 
-    lines = [
-        f"Verification ID: {_format_value(payload.get('verification_id'))}",
-        f"User: {_format_value(payload.get('user_name'))} ({_format_value(payload.get('user_email'))})",
-        f"Operation/Module: {_format_value(payload.get('operation_type'))}",
-        f"Status: {_format_value(payload.get('status'))}",
-        f"Result: {_format_value(payload.get('result'))}",
-        f"Supervisor Note: {_format_value(payload.get('supervisor_note'))}",
-        f"Verified At: {_format_value(payload.get('verified_at'))}",
-        f"Document Reference: {_format_value(payload.get('document_reference'))}",
-    ]
-    for line in lines:
-        pdf.multi_cell(0, 6, line)
+    _pdf_write_line(f"Verification ID: {_format_value(payload.get('verification_id'))}")
+    _pdf_write_line(
+        f"User: {_format_value(payload.get('user_name'))} ({_format_value(payload.get('user_email'))})"
+    )
+    _pdf_write_line(f"Operation/Module: {_format_value(payload.get('operation_type'))}")
+    _pdf_write_line(f"Status: {_format_value(payload.get('status'))}")
+    _pdf_write_line(f"Result: {_format_value(payload.get('result'))}")
+    _pdf_write_line(f"Supervisor Note: {_format_value(payload.get('supervisor_note'))}")
+    _pdf_write_line(f"Verified At: {_format_value(payload.get('verified_at'))}")
+    _pdf_write_line(f"Document Reference: {_format_value(payload.get('document_reference'))}")
 
-    return pdf.output(dest="S").encode("latin-1", errors="ignore")
+    raw = pdf.output(dest="S")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    return str(raw).encode("latin-1", errors="ignore")
 
 
 def _build_verification_csv(payload: dict) -> bytes:
