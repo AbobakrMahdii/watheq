@@ -45,20 +45,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _logout() async {
     final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('تسجيل الخروج'),
-        content: const Text('هل أنت متأكد من أنك تريد تسجيل الخروج؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+              ),
+              child: Icon(
+                Icons.logout_rounded,
+                color: Colors.red.shade700,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'تسجيل الخروج',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'هل أنت متأكد من أنك تريد تسجيل الخروج من التطبيق؟',
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.5,
+            ),
           ),
-          FilledButton(
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              side: BorderSide(color: Colors.grey.shade300),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+              ),
+            ),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton.icon(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('تسجيل الخروج'),
+            icon: const Icon(Icons.logout, size: 18),
+            label: const Text(
+              'تسجيل الخروج',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+              ),
+            ),
           ),
         ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+        actionsAlignment: MainAxisAlignment.end,
       ),
     );
     if (confirmed != true || !mounted) return;
