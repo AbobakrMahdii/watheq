@@ -57,6 +57,14 @@ seaborn>=0.12.0
 pandas>=2.0.0
 tqdm>=4.64.0
 
+# ── Testing Dependencies ───────────────────────────────────────────────────
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+httpx>=0.25.2
+faker>=20.1.0
+
 # NOTE: System-level dependencies not covered by pip:
 #   - NVIDIA GPU driver (for CUDA-accelerated torch — optional)
 #   - Google Cloud credentials JSON (for Vision OCR)
