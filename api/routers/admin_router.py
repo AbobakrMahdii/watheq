@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from datetime import datetime, timezone
 import csv
 import io
+from io import BytesIO
 
 from api.database import get_user_collection, database
 from ..models import UserCreate, UserUpdate
@@ -80,6 +81,128 @@ def _pdf_write_line(pdf, text: str, line_height: float = 5.0) -> None:
         pdf.cell(0, line_height, line, ln=1)
 
 
+def _pdf_kv(pdf, label: str, value: object, line_height: float = 5.0, label_width: float = 45.0) -> None:
+    width = pdf.w - pdf.l_margin - pdf.r_margin
+    if width <= 0:
+        return
+    label_text = (label or "").strip()
+    value_text = "" if value is None else str(value)
+    value_text = value_text.replace("\n", " ").strip()
+    if not label_text:
+        _pdf_write_line(pdf, value_text, line_height=line_height)
+        return
+    # Label column
+    pdf.cell(label_width, line_height, label_text, ln=0)
+    # Value column
+    remaining = max(10.0, width - label_width)
+    x = pdf.get_x()
+    y = pdf.get_y()
+    pdf.multi_cell(remaining, line_height, value_text)
+    # Align next line after multi_cell
+    pdf.set_xy(pdf.l_margin, max(y + line_height, pdf.get_y()))
+
+
+def _chart_image_status_pie(data: dict) -> BytesIO | None:
+    breakdown = data.get("status_breakdown") or {}
+    if not breakdown:
+        return None
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    labels = list(breakdown.keys())
+    values = [breakdown[k] for k in labels]
+    fig, ax = plt.subplots(figsize=(4.2, 3.0), dpi=150)
+    ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=90)
+    ax.axis("equal")
+    buf = BytesIO()
+    fig.tight_layout()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _chart_image_doc_type_bar(data: dict) -> BytesIO | None:
+    rows = data.get("by_document_type") or []
+    if not rows:
+        return None
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    labels = [r.get("type") or "Unknown" for r in rows]
+    values = [r.get("count") or 0 for r in rows]
+    fig, ax = plt.subplots(figsize=(6.0, 3.0), dpi=150)
+    ax.bar(range(len(values)), values, color="#3b82f6")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7)
+    ax.set_ylabel("Count")
+    fig.tight_layout()
+    buf = BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _chart_image_failure_bar(data: dict) -> BytesIO | None:
+    rows = data.get("failure_reasons") or []
+    if not rows:
+        return None
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    labels = [r.get("reason") or "UNKNOWN" for r in rows]
+    values = [r.get("count") or 0 for r in rows]
+    fig, ax = plt.subplots(figsize=(6.0, 3.0), dpi=150)
+    ax.barh(range(len(values)), values, color="#ef4444")
+    ax.set_yticks(range(len(labels)))
+    ax.set_yticklabels(labels, fontsize=7)
+    ax.invert_yaxis()
+    ax.set_xlabel("Count")
+    fig.tight_layout()
+    buf = BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def _chart_image_time_series(data: dict) -> BytesIO | None:
+    rows = data.get("time_series") or []
+    if not rows:
+        return None
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    dates = [r.get("date") for r in rows]
+    series = {
+        "SUCCESS": [r.get("SUCCESS", 0) for r in rows],
+        "FAILED": [r.get("FAILED", 0) for r in rows],
+        "RUNNING": [r.get("RUNNING", 0) for r in rows],
+        "PENDING": [r.get("PENDING", 0) for r in rows],
+    }
+    fig, ax = plt.subplots(figsize=(7.2, 3.0), dpi=150)
+    for name, vals in series.items():
+        ax.plot(dates, vals, label=name)
+    ax.legend(fontsize=7, ncol=4)
+    ax.tick_params(axis="x", labelrotation=45, labelsize=7)
+    ax.set_ylabel("Count")
+    fig.tight_layout()
+    buf = BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 async def _resolve_user_doc(users, user_id: str) -> dict:
     """
     Resolve a user document by id (numeric), username, or email.
@@ -117,6 +240,34 @@ def to_public_user(user: dict) -> dict:
     return user
 
 
+def _normalize_header(value: str) -> str:
+    return (
+        (value or "")
+        .strip()
+        .lower()
+        .replace(" ", "_")
+        .replace("-", "_")
+        .replace("__", "_")
+    )
+
+
+def _map_headers(headers: list[str]) -> dict[str, int]:
+    mapping = {}
+    for idx, raw in enumerate(headers):
+        key = _normalize_header(raw)
+        if key in ("name", "full_name", "full_name_ar", "fullname", "اسم", "الاسم"):
+            mapping["name"] = idx
+        elif key in ("username", "user_name", "اسم_المستخدم", "اسم_المستخدم_إنجليزي"):
+            mapping["username"] = idx
+        elif key in ("email", "email_address", "البريد", "البريد_الالكتروني", "البريد_الإلكتروني"):
+            mapping["email"] = idx
+        elif key in ("password", "pass", "passcode", "كلمة_المرور", "الرمز"):
+            mapping["password"] = idx
+        elif key in ("role", "user_role", "الدور", "الصلاحية", "النوع"):
+            mapping["role"] = idx
+    return mapping
+
+
 # =========================
 # Users list (admin + super)
 # =========================
@@ -148,6 +299,126 @@ async def create_user(user: UserCreate, admin=Depends(get_current_admin)):
     )
 
     return {"message": "User created"}
+
+
+@router.get("/users/template")
+async def download_users_template(admin=Depends(get_current_admin)):
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "users"
+    ws.append(["name", "username", "email", "password"])
+    ws.append(["Example User", "example_user", "user@example.com", "ChangeMe123"])
+
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    filename = "user_data_template.xlsx"
+    return Response(
+        stream.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/users/import")
+async def import_users(file: UploadFile = File(...), admin=Depends(get_current_admin)):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Please upload an .xlsx file")
+
+    from openpyxl import load_workbook
+
+    content = await file.read()
+    try:
+        wb = load_workbook(BytesIO(content), data_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Excel file")
+
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        raise HTTPException(status_code=400, detail="Empty Excel file")
+
+    headers = [str(c or "").strip() for c in rows[0]]
+    mapping = _map_headers(headers)
+    missing = [k for k in ("name", "email", "password") if k not in mapping]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required columns: {', '.join(missing)}",
+        )
+
+    users = get_user_collection()
+    created = 0
+    skipped = 0
+    errors: list[dict] = []
+    seen_emails: set[str] = set()
+    seen_usernames: set[str] = set()
+
+    for idx, row in enumerate(rows[1:], start=2):
+        if row is None:
+            continue
+
+        def _cell(key: str) -> str:
+            val = row[mapping[key]] if mapping.get(key) is not None and mapping[key] < len(row) else None
+            return "" if val is None else str(val).strip()
+
+        name = _cell("name")
+        username = _cell("username") if "username" in mapping else ""
+        email = _cell("email").lower()
+        password = _cell("password")
+
+        if not name and not email and not password and not username:
+            continue
+        if not name or not email or not password:
+            errors.append({"row": idx, "error": "name, email, password are required"})
+            skipped += 1
+            continue
+        if "@" not in email:
+            errors.append({"row": idx, "error": "invalid email"})
+            skipped += 1
+            continue
+        if email in seen_emails:
+            errors.append({"row": idx, "error": "duplicate email in file"})
+            skipped += 1
+            continue
+        if username and username in seen_usernames:
+            errors.append({"row": idx, "error": "duplicate username in file"})
+            skipped += 1
+            continue
+
+        if await users.find_one({"email": email}):
+            errors.append({"row": idx, "error": "email already exists"})
+            skipped += 1
+            continue
+        if username and await users.find_one({"username": username}):
+            errors.append({"row": idx, "error": "username already exists"})
+            skipped += 1
+            continue
+
+        await users.insert_one(
+            {
+                "name": name,
+                "username": username or None,
+                "email": email,
+                "password": get_password_hash(password),
+                "role": "user",
+                "is_active": True,
+                "deleted_at": None,
+            }
+        )
+        created += 1
+        seen_emails.add(email)
+        if username:
+            seen_usernames.add(username)
+
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors[:50],
+        "error_count": len(errors),
+    }
 
 
 # =========================
@@ -238,6 +509,143 @@ async def create_admin(user: UserCreate, super_admin=Depends(get_current_super_a
     )
 
     return {"message": "Admin created"}
+
+
+@router.get("/admins/template")
+async def download_admins_template(super_admin=Depends(get_current_super_admin)):
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "admins"
+    ws.append(["name", "username", "email", "password", "role"])
+    ws.append(["Example Admin", "example_admin", "admin@example.com", "ChangeMe123", "admin"])
+    ws.append(["Example Super", "super_admin_1", "super@example.com", "ChangeMe123", "super_admin"])
+
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    filename = "admin_data_template.xlsx"
+    return Response(
+        stream.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/admins/import")
+async def import_admins(
+    file: UploadFile = File(...),
+    super_admin=Depends(get_current_super_admin),
+):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Please upload an .xlsx file")
+
+    from openpyxl import load_workbook
+
+    content = await file.read()
+    try:
+        wb = load_workbook(BytesIO(content), data_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Excel file")
+
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        raise HTTPException(status_code=400, detail="Empty Excel file")
+
+    headers = [str(c or "").strip() for c in rows[0]]
+    mapping = _map_headers(headers)
+    missing = [k for k in ("name", "email", "password", "role") if k not in mapping]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required columns: {', '.join(missing)}",
+        )
+
+    users = get_user_collection()
+    created = 0
+    skipped = 0
+    errors: list[dict] = []
+    seen_emails: set[str] = set()
+    seen_usernames: set[str] = set()
+
+    requester_id = str(super_admin.get("sub"))
+    first_sa_id = await _get_first_super_admin_id()
+    is_requester_first_sa = requester_id == (first_sa_id or "")
+
+    for idx, row in enumerate(rows[1:], start=2):
+        if row is None:
+            continue
+
+        def _cell(key: str) -> str:
+            val = row[mapping[key]] if mapping.get(key) is not None and mapping[key] < len(row) else None
+            return "" if val is None else str(val).strip()
+
+        name = _cell("name")
+        username = _cell("username") if "username" in mapping else ""
+        email = _cell("email").lower()
+        password = _cell("password")
+        role = _cell("role").lower()
+
+        if not name and not email and not password and not username and not role:
+            continue
+        if not name or not email or not password or not role:
+            errors.append({"row": idx, "error": "name, email, password, role are required"})
+            skipped += 1
+            continue
+        if "@" not in email:
+            errors.append({"row": idx, "error": "invalid email"})
+            skipped += 1
+            continue
+        if role not in ("admin", "super_admin"):
+            errors.append({"row": idx, "error": "role must be admin or super_admin"})
+            skipped += 1
+            continue
+        if role == "super_admin" and not is_requester_first_sa:
+            errors.append({"row": idx, "error": "only the primary super admin can create super_admin"})
+            skipped += 1
+            continue
+        if email in seen_emails:
+            errors.append({"row": idx, "error": "duplicate email in file"})
+            skipped += 1
+            continue
+        if username and username in seen_usernames:
+            errors.append({"row": idx, "error": "duplicate username in file"})
+            skipped += 1
+            continue
+
+        if await users.find_one({"email": email}):
+            errors.append({"row": idx, "error": "email already exists"})
+            skipped += 1
+            continue
+        if username and await users.find_one({"username": username}):
+            errors.append({"row": idx, "error": "username already exists"})
+            skipped += 1
+            continue
+
+        await users.insert_one(
+            {
+                "name": name,
+                "username": username or None,
+                "email": email,
+                "password": get_password_hash(password),
+                "role": role,
+                "is_active": True,
+                "deleted_at": None,
+            }
+        )
+        created += 1
+        seen_emails.add(email)
+        if username:
+            seen_usernames.add(username)
+
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors[:50],
+        "error_count": len(errors),
+    }
 
 
 # =========================
@@ -528,6 +936,8 @@ async def export_analytics(
     pdf.set_font_size(12)
     pdf.cell(0, 8, safe("Analytics Export"), ln=1)
     pdf.set_font_size(10)
+    _pdf_kv(pdf, "Export Version", "2026-02-09")
+    pdf.ln(1)
 
     pdf.cell(0, 6, safe("Summary"), ln=1)
     for key in (
@@ -539,34 +949,70 @@ async def export_analytics(
         "total_audit_logs",
         "avg_processing_time_sec",
     ):
-        _pdf_write_line(pdf, safe(f"{key}: {data.get(key)}"))
+        _pdf_kv(pdf, key, data.get(key))
 
+    pdf.ln(2)
     pdf.ln(2)
     pdf.cell(0, 6, safe("Status Breakdown"), ln=1)
     for status, count in (data.get("status_breakdown") or {}).items():
-        _pdf_write_line(pdf, safe(f"{status}: {count}"))
+        _pdf_kv(pdf, status, count)
 
+    status_pie = _chart_image_status_pie(data)
+    if status_pie:
+        from PIL import Image
+
+        img = Image.open(status_pie)
+        pdf.ln(1)
+        pdf.image(img, w=120)
+
+    pdf.ln(2)
     pdf.ln(2)
     pdf.cell(0, 6, safe("By Document Type"), ln=1)
     for row in data.get("by_document_type") or []:
-        _pdf_write_line(pdf, safe(f"{row.get('type')}: {row.get('count')}"))
+        _pdf_kv(pdf, row.get("type") or "Unknown", row.get("count"))
 
+    doc_bar = _chart_image_doc_type_bar(data)
+    if doc_bar:
+        from PIL import Image
+
+        img = Image.open(doc_bar)
+        pdf.ln(1)
+        pdf.image(img, w=190)
+
+    pdf.ln(2)
     pdf.ln(2)
     pdf.cell(0, 6, safe("Failure Reasons"), ln=1)
     for row in data.get("failure_reasons") or []:
-        _pdf_write_line(pdf, safe(f"{row.get('reason')}: {row.get('count')}"))
+        _pdf_kv(pdf, row.get("reason") or "UNKNOWN", row.get("count"))
 
+    failure_bar = _chart_image_failure_bar(data)
+    if failure_bar:
+        from PIL import Image
+
+        img = Image.open(failure_bar)
+        pdf.ln(1)
+        pdf.image(img, w=190)
+
+    pdf.ln(2)
     pdf.ln(2)
     pdf.cell(0, 6, safe("Time Series"), ln=1)
     for row in data.get("time_series") or []:
-        _pdf_write_line(pdf, safe(f"Date: {row.get('date')}"))
+        _pdf_kv(pdf, "Date", row.get("date"))
         pdf.set_font_size(9)
-        _pdf_write_line(pdf, safe(f"SUCCESS: {row.get('SUCCESS',0)}"))
-        _pdf_write_line(pdf, safe(f"FAILED: {row.get('FAILED',0)}"))
-        _pdf_write_line(pdf, safe(f"RUNNING: {row.get('RUNNING',0)}"))
-        _pdf_write_line(pdf, safe(f"PENDING: {row.get('PENDING',0)}"))
+        _pdf_kv(pdf, "SUCCESS", row.get("SUCCESS", 0))
+        _pdf_kv(pdf, "FAILED", row.get("FAILED", 0))
+        _pdf_kv(pdf, "RUNNING", row.get("RUNNING", 0))
+        _pdf_kv(pdf, "PENDING", row.get("PENDING", 0))
         pdf.set_font_size(10)
         pdf.ln(1)
+
+    ts_chart = _chart_image_time_series(data)
+    if ts_chart:
+        from PIL import Image
+
+        img = Image.open(ts_chart)
+        pdf.ln(1)
+        pdf.image(img, w=200)
 
     filename = f'analytics_export_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.pdf'
     pdf_bytes = pdf.output(dest="S")
