@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordController = TextEditingController();
   final _ipController = TextEditingController();
   final _portController = TextEditingController();
+  final _dashboardPortController = TextEditingController();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -35,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen>
     final config = ConnectionConfigService.instance;
     _ipController.text = config.ip;
     _portController.text = config.port;
+    _dashboardPortController.text = config.dashboardPort;
 
     _expandController = AnimationController(
       vsync: this,
@@ -52,6 +54,7 @@ class _LoginScreenState extends State<LoginScreen>
     _passwordController.dispose();
     _ipController.dispose();
     _portController.dispose();
+    _dashboardPortController.dispose();
     _expandController.dispose();
     super.dispose();
   }
@@ -75,6 +78,7 @@ class _LoginScreenState extends State<LoginScreen>
     ConnectionConfigService.instance.setConnection(
       ip: _ipController.text.trim(),
       port: _portController.text.trim(),
+      dashboardPort: _dashboardPortController.text.trim(),
     );
 
     setState(() => _isLoading = true);
@@ -395,6 +399,43 @@ class _LoginScreenState extends State<LoginScreen>
                     ],
                   ),
                   const SizedBox(height: 10),
+                  // Dashboard Port
+                  TextFormField(
+                    controller: _dashboardPortController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(5),
+                    ],
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                      letterSpacing: 0.5,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'منفذ لوحة التحكم',
+                      hintText: '3200',
+                      hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withValues(
+                          alpha: 0.4,
+                        ),
+                        fontFamily: 'monospace',
+                      ),
+                      prefixIcon: const Icon(Icons.dashboard, size: 20),
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    validator: (value) {
+                      final v = (value ?? '').trim();
+                      if (v.isEmpty) return 'مطلوب';
+                      final n = int.tryParse(v);
+                      if (n == null || n < 1 || n > 65535) {
+                        return 'منفذ غير صالح';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 10),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -410,25 +451,71 @@ class _LoginScreenState extends State<LoginScreen>
                         color: AppColors.primary.withValues(alpha: 0.12),
                       ),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.link_rounded,
-                          size: 14,
-                          color: AppColors.primary.withValues(alpha: 0.7),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'http://${_ipController.text}:${_portController.text}',
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              color: AppColors.primary.withValues(alpha: 0.8),
-                              fontWeight: FontWeight.w500,
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.link_rounded,
+                              size: 14,
+                              color: AppColors.primary.withValues(alpha: 0.7),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'API:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'http://${_ipController.text}:${_portController.text}',
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                  color: AppColors.primary.withValues(alpha: 0.8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.dashboard,
+                              size: 14,
+                              color: AppColors.primary.withValues(alpha: 0.7),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Dashboard:',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'http://${_ipController.text}:${_dashboardPortController.text}',
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                  color: AppColors.primary.withValues(alpha: 0.8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
