@@ -32,6 +32,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'وثيق',
       navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       initialRoute: '/',
       routes: {
