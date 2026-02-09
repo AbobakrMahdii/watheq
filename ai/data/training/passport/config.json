@@ -1,0 +1,43 @@
+{
+  "doc_type": "passport",
+  "elements": [
+    "barcode",
+    "full",
+    "logo",
+    "seal"
+  ],
+  "thresholds": {
+    "full": 0.8,
+    "seal": 0.8
+  },
+  "trained_at": "2026-02-07T18:24:00.556315",
+  "version": "1.0",
+  "results": {
+    "barcode": {
+      "status": "error",
+      "message": "'NoneType' object has no attribute 'ndim'",
+      "element": "barcode"
+    },
+    "full": {
+      "status": "success",
+      "element": "full",
+      "reference_path": "ai/data/refrences/passport/full.jpeg",
+      "output_dir": "ai/data/training/passport/full",
+      "trained_at": "2026-02-07T18:23:55.223907",
+      "threshold": 0.8
+    },
+    "logo": {
+      "status": "error",
+      "message": "'NoneType' object has no attribute 'ndim'",
+      "element": "logo"
+    },
+    "seal": {
+      "status": "success",
+      "element": "seal",
+      "reference_path": "ai/data/refrences/passport/seal.jpeg",
+      "output_dir": "ai/data/training/passport/seal",
+      "trained_at": "2026-02-07T18:24:00.555987",
+      "threshold": 0.8
+    }
+  }
+}

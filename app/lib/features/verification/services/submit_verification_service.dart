@@ -7,7 +7,6 @@ import '../../biometric/models/face_verify_result.dart';
 import '../../biometric/services/face_verify_service.dart';
 import '../models/ipfs_pin_result.dart';
 import 'ipfs_service.dart';
-import 'ledger_service.dart';
 import 'ocr_service.dart';
 
 class SubmitVerificationResult {
@@ -17,7 +16,8 @@ class SubmitVerificationResult {
     required this.ocr,
     required this.docId,
     required this.sha256,
-    required this.ledgerRecorded,
+    this.aiElements = const {},
+    this.dataVerificationResult = const {},
   });
 
   final FaceVerifyResult face;
@@ -25,13 +25,19 @@ class SubmitVerificationResult {
   final Map<String, dynamic> ocr;
   final String docId;
   final String sha256;
-  final bool ledgerRecorded;
+
+  /// نتائج تحقق الذكاء الاصطناعي لكل عنصر (logo, stamp, ...)
+  final Map<String, dynamic> aiElements;
+
+  /// نتائج مطابقة البيانات مع سجلات المواطنين
+  final Map<String, dynamic> dataVerificationResult;
 }
 
 class SubmitVerificationService {
   SubmitVerificationService._();
 
-  static final SubmitVerificationService instance = SubmitVerificationService._();
+  static final SubmitVerificationService instance =
+      SubmitVerificationService._();
 
   Future<SubmitVerificationResult> submit({
     required File documentImageFront,
@@ -51,8 +57,10 @@ class SubmitVerificationService {
         personPhoto: personImage,
       );
     } catch (e) {
-      throw SubmitVerificationException('فشل مطابقة الوجه: ${e.toString()}',
-          cause: e);
+      throw SubmitVerificationException(
+        'فشل مطابقة الوجه: ${e.toString()}',
+        cause: e,
+      );
     }
     if (!face.match) {
       throw SubmitVerificationException(
@@ -65,38 +73,35 @@ class SubmitVerificationService {
       final bytes = await documentImageFront.readAsBytes();
       sha = sha256.convert(bytes).toString();
     } catch (e) {
-      throw SubmitVerificationException('فشل حساب بصمة الملف (SHA256)', cause: e);
+      throw SubmitVerificationException(
+        'فشل حساب بصمة الملف (SHA256)',
+        cause: e,
+      );
     }
 
     final IpfsPinResult ipfs;
     try {
       ipfs = await IpfsService.instance.pinFile(file: documentImageFront);
     } catch (e) {
-      throw SubmitVerificationException('فشل رفع الوثيقة إلى IPFS: ${e.toString()}',
-          cause: e);
+      throw SubmitVerificationException(
+        'فشل رفع الوثيقة إلى IPFS: ${e.toString()}',
+        cause: e,
+      );
     }
 
     final Map<String, dynamic> ocr;
     try {
       ocr = await OcrService.instance.ocrDocument(file: documentImageFront);
     } catch (e) {
-      throw SubmitVerificationException('فشل قراءة OCR: ${e.toString()}', cause: e);
+      throw SubmitVerificationException(
+        'فشل قراءة OCR: ${e.toString()}',
+        cause: e,
+      );
     }
 
     final docId =
         'DOC-${DateTime.now().millisecondsSinceEpoch}-${documentTypeId}';
-    try {
-      await LedgerService.instance.createDoc(
-        docId: docId,
-        cid: ipfs.cid,
-        filename: ipfs.filename.isEmpty ? 'document.jpg' : ipfs.filename,
-        owner: session.email,
-        sha256: sha,
-      );
-    } catch (e) {
-      throw SubmitVerificationException('فشل تسجيل الوثيقة في السجل: ${e.toString()}',
-          cause: e);
-    }
+    // Blockchain recording is now handled server-side in the verification pipeline
 
     return SubmitVerificationResult(
       face: face,
@@ -104,7 +109,6 @@ class SubmitVerificationService {
       ocr: ocr,
       docId: docId,
       sha256: sha,
-      ledgerRecorded: true,
     );
   }
 }

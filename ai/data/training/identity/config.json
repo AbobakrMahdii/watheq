@@ -1,0 +1,141 @@
+{
+  "doc_type": "identity",
+  "version": "3.0",
+  "model": "ElementClassifier (EfficientNet-B0 binary)",
+  "trained_at": "2026-02-09T07:31:27.588444",
+  "layout": {
+    "logo_main": {
+      "roi": {
+        "x": 0.02,
+        "y": 0.02,
+        "w": 0.15,
+        "h": 0.2
+      },
+      "tolerance": 0.08,
+      "weight": 1.5,
+      "critical": true,
+      "type": "visual",
+      "ref_stem": "logo"
+    },
+    "stamp": {
+      "roi": {
+        "x": 0.6,
+        "y": 0.7,
+        "w": 0.15,
+        "h": 0.25
+      },
+      "tolerance": 0.12,
+      "weight": 1.5,
+      "critical": true,
+      "type": "visual",
+      "ref_stem": "seal"
+    },
+    "photo_primary": {
+      "roi": {
+        "x": 0.75,
+        "y": 0.15,
+        "w": 0.22,
+        "h": 0.55
+      },
+      "tolerance": 0.1,
+      "weight": 1.0,
+      "critical": true,
+      "type": "visual",
+      "ref_stem": "full"
+    },
+    "barcode": {
+      "roi": {
+        "x": 0.05,
+        "y": 0.8,
+        "w": 0.5,
+        "h": 0.15
+      },
+      "tolerance": 0.12,
+      "weight": 1.3,
+      "critical": false,
+      "type": "visual",
+      "ref_stem": "barcode"
+    },
+    "text_name": {
+      "roi": {
+        "x": 0.2,
+        "y": 0.2,
+        "w": 0.5,
+        "h": 0.1
+      },
+      "tolerance": 0.12,
+      "weight": 1.0,
+      "critical": false,
+      "type": "text",
+      "ref_stem": "text_name"
+    },
+    "text_national_id": {
+      "roi": {
+        "x": 0.2,
+        "y": 0.35,
+        "w": 0.5,
+        "h": 0.08
+      },
+      "tolerance": 0.12,
+      "weight": 1.2,
+      "critical": false,
+      "type": "text",
+      "ref_stem": "text_national_id"
+    }
+  },
+  "thresholds": {
+    "pass_score": 0.95,
+    "suspicious_score": 0.7
+  },
+  "augmentation_results": {
+    "barcode": {
+      "status": "error",
+      "message": "OpenCV(4.13.0) D:\\a\\opencv-python\\opencv-python\\opencv\\modules\\imgcodecs\\src\\loadsave.cpp:1310: error: (-215:Assertion failed) !buf.empty() in function 'cv::imdecode_'\n",
+      "element": "barcode"
+    }
+  },
+  "classifier_results": {
+    "logo_main": {
+      "status": "skipped",
+      "message": "identity_logo_main.pt already exists",
+      "class_name": "logo_main",
+      "ref_stem": "logo",
+      "weight_path": "ai/models/weights/identity_logo_main.pt"
+    },
+    "stamp": {
+      "status": "skipped",
+      "message": "identity_stamp.pt already exists",
+      "class_name": "stamp",
+      "ref_stem": "seal",
+      "weight_path": "ai/models/weights/identity_stamp.pt"
+    },
+    "photo_primary": {
+      "status": "skipped",
+      "message": "identity_photo_primary.pt already exists",
+      "class_name": "photo_primary",
+      "ref_stem": "full",
+      "weight_path": "ai/models/weights/identity_photo_primary.pt"
+    },
+    "barcode": {
+      "status": "error",
+      "message": "Training data not found for barcode",
+      "class_name": "barcode"
+    }
+  },
+  "font_results": {
+    "text_name": {
+      "status": "success",
+      "class_name": "text_name",
+      "profile_path": "ai/models/fonts/identity_text_name.json",
+      "ink_density": 0.13195389634238555,
+      "stroke_width": 8.689006805419922
+    },
+    "text_national_id": {
+      "status": "success",
+      "class_name": "text_national_id",
+      "profile_path": "ai/models/fonts/identity_text_national_id.json",
+      "ink_density": 0.0835940731150312,
+      "stroke_width": 7.093869209289551
+    }
+  }
+}

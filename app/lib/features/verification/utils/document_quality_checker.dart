@@ -21,14 +21,14 @@ class DocumentQualityResult {
   final double edgeScore;
   final String? message;
 
-  bool get isValid => isBrightnessOk && isBlurOk;
+  bool get isValid => isBrightnessOk && isBlurOk && isEdgeOk;
 }
 
 class DocumentQualityChecker {
   static const double brightnessMin = 30;
   static const double brightnessMax = 235;
   static const double blurMin = 45;
-  static const double edgeMin = 0.02;
+  static const double edgeMin = 0.025;
 
   static DocumentQualityResult check(File file) {
     final bytes = file.readAsBytesSync();

@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { SortableHeader } from "@/components/sortable-header";
+import { useSortState } from "@/hooks/use-sort-state";
 
 const PAGE_SIZE = 20;
 
@@ -48,6 +50,8 @@ export default function AuditLogsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [userName, setUserName] = useState("");
+  const [exporting, setExporting] = useState<null | "pdf" | "xlsx">(null);
+  const { sortBy, sortOrder, toggleSort } = useSortState("created_at", "desc");
 
   const totalPages = useMemo(() => {
     if (!data) return 1;
@@ -66,6 +70,8 @@ export default function AuditLogsPage() {
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
       if (userName.trim()) params.set("user_name", userName.trim());
+      params.set("sort_by", sortBy);
+      params.set("sort_order", sortOrder);
 
       const res = await fetch(`/api/admin/audit-logs?${params.toString()}`);
       const payload = await res.json().catch(() => ({}));
@@ -75,6 +81,49 @@ export default function AuditLogsPage() {
       toast.error(e?.message || "Failed to load audit logs");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function getExportFilename(headerValue: string | null) {
+    if (!headerValue) return null;
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || null;
+  }
+
+  async function downloadExport(format: "pdf" | "xlsx") {
+    setExporting(format);
+    try {
+      const params = new URLSearchParams();
+      if (userName) params.set("user_name", userName);
+      if (operationType) params.set("operation_type", operationType);
+      if (status) params.set("status", status);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      if (query) params.set("query", query);
+      params.set("format", format);
+
+      const res = await fetch(`/api/admin/audit-logs/export?${params}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Failed to export audit logs");
+      }
+      const blob = await res.blob();
+      const filename =
+        getExportFilename(res.headers.get("content-disposition")) ||
+        `audit_logs_${new Date().toISOString().replace(/[:.]/g, "-")}.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("تم تنزيل التقرير");
+    } catch (e: any) {
+      toast.error(e?.message || "فشل تنزيل التقرير");
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -88,10 +137,9 @@ export default function AuditLogsPage() {
     loadAuditLogs();
   }
 
-
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="bg-white shadow p-4 mb-4 flex items-center justify-between">
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <header className="mb-4 flex items-center justify-between bg-white p-4 shadow">
         <div>
           <h1 className="text-2xl font-semibold">Audit Logs</h1>
           <p className="text-sm text-slate-500">Read-only activity tracking for all system operations.</p>
@@ -101,15 +149,15 @@ export default function AuditLogsPage() {
         </Link>
       </header>
 
-      <main className="flex-1 p-6 space-y-6">
-        <form onSubmit={applyFilters} className="bg-white p-4 rounded shadow grid grid-cols-1 md:grid-cols-3 gap-4">
+      <main className="flex-1 space-y-6 p-6">
+        <form onSubmit={applyFilters} className="grid grid-cols-1 gap-4 rounded bg-white p-4 shadow md:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-slate-700">Search</label>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
               placeholder="name, email, module..."
             />
           </div>
@@ -119,7 +167,7 @@ export default function AuditLogsPage() {
               type="text"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
               placeholder="Exact or partial name"
             />
           </div>
@@ -128,7 +176,7 @@ export default function AuditLogsPage() {
             <select
               value={operationType}
               onChange={(e) => setOperationType(e.target.value)}
-              className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
             >
               <option value="">All</option>
               <option value="Login">Login</option>
@@ -147,7 +195,7 @@ export default function AuditLogsPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
             >
               <option value="">All</option>
               <option value="success">Success</option>
@@ -160,7 +208,7 @@ export default function AuditLogsPage() {
               type="datetime-local"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
             />
           </div>
           <div>
@@ -169,25 +217,29 @@ export default function AuditLogsPage() {
               type="datetime-local"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+              className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
             />
           </div>
-          <div className="md:col-span-3 flex justify-end gap-2">
-            <a
-              href="/api/admin/audit-logs/export?format=pdf"
-              className="bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700"
+          <div className="flex justify-end gap-2 md:col-span-3">
+            <button
+              type="button"
+              onClick={() => downloadExport("pdf")}
+              disabled={exporting === "pdf"}
+              className="rounded-md bg-slate-600 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
             >
-              Export PDF
-            </a>
-            <a
-              href="/api/admin/audit-logs/export?format=xlsx"
-              className="bg-slate-700 text-white px-4 py-2 rounded-md hover:bg-slate-800"
+              {exporting === "pdf" ? "جارٍ التصدير..." : "تصدير PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadExport("xlsx")}
+              disabled={exporting === "xlsx"}
+              className="rounded-md bg-slate-700 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
             >
-              Export Excel
-            </a>
+              {exporting === "xlsx" ? "جارٍ التصدير..." : "تصدير Excel"}
+            </button>
             <button
               type="submit"
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
               disabled={loading}
             >
               Apply Filters
@@ -195,8 +247,8 @@ export default function AuditLogsPage() {
           </div>
         </form>
 
-        <div className="bg-white p-4 rounded shadow">
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded bg-white p-4 shadow">
+          <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xl font-semibold">Logs</h2>
             <span className="text-sm text-slate-500">{data?.total ?? 0} entries</span>
           </div>
@@ -208,31 +260,75 @@ export default function AuditLogsPage() {
               <table className="min-w-full divide-y divide-slate-200">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Time</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">User</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">
+                      <SortableHeader
+                        label="Time"
+                        field="created_at"
+                        currentSortBy={sortBy}
+                        currentSortOrder={sortOrder}
+                        onSort={(f) => {
+                          toggleSort(f);
+                          setPage(1);
+                        }}
+                        className="text-xs text-slate-500 uppercase"
+                      />
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">
+                      <SortableHeader
+                        label="User"
+                        field="user_name"
+                        currentSortBy={sortBy}
+                        currentSortOrder={sortOrder}
+                        onSort={(f) => {
+                          toggleSort(f);
+                          setPage(1);
+                        }}
+                        className="text-xs text-slate-500 uppercase"
+                      />
+                    </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Role</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Operation</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">
+                      <SortableHeader
+                        label="Operation"
+                        field="operation_type"
+                        currentSortBy={sortBy}
+                        currentSortOrder={sortOrder}
+                        onSort={(f) => {
+                          toggleSort(f);
+                          setPage(1);
+                        }}
+                        className="text-xs text-slate-500 uppercase"
+                      />
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">
+                      <SortableHeader
+                        label="Status"
+                        field="status"
+                        currentSortBy={sortBy}
+                        currentSortOrder={sortOrder}
+                        onSort={(f) => {
+                          toggleSort(f);
+                          setPage(1);
+                        }}
+                        className="text-xs text-slate-500 uppercase"
+                      />
+                    </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Module</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Path</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">File</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">Failure Reason</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-200 bg-white">
                   {data.items.map((log) => (
                     <tr key={log.id}>
-                      <td className="px-4 py-2 text-sm text-slate-600">
-                        {new Date(log.created_at).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-slate-700">
-                        {log.user_name || log.user_email || "-"}
-                      </td>
+                      <td className="px-4 py-2 text-sm text-slate-600">{new Date(log.created_at).toLocaleString()}</td>
+                      <td className="px-4 py-2 text-sm text-slate-700">{log.user_name || log.user_email || "-"}</td>
                       <td className="px-4 py-2 text-sm text-slate-600">{log.user_role || "-"}</td>
                       <td className="px-4 py-2 text-sm text-slate-700">{log.operation_type}</td>
                       <td className="px-4 py-2 text-sm">
                         <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${
                             log.status === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                           }`}
                         >
@@ -240,7 +336,9 @@ export default function AuditLogsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-2 text-sm text-slate-600">{log.module || "-"}</td>
-                      <td className="px-4 py-2 text-xs text-slate-500">{log.method} {log.path}</td>
+                      <td className="px-4 py-2 text-xs text-slate-500">
+                        {log.method} {log.path}
+                      </td>
                       <td className="px-4 py-2 text-xs text-slate-500">
                         {log.file_name ? (
                           <div className="flex items-center gap-2">
@@ -262,7 +360,10 @@ export default function AuditLogsPage() {
                           "-"
                         )}
                       </td>
-                      <td className="px-4 py-2 text-xs text-slate-500 max-w-sm truncate" title={log.failure_reason || ""}>
+                      <td
+                        className="max-w-sm truncate px-4 py-2 text-xs text-slate-500"
+                        title={log.failure_reason || ""}
+                      >
                         {log.failure_reason || "-"}
                       </td>
                     </tr>
@@ -272,9 +373,9 @@ export default function AuditLogsPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-4">
+          <div className="mt-4 flex items-center justify-between">
             <button
-              className="px-3 py-1 border rounded-md text-sm disabled:opacity-50"
+              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1 || loading}
             >
@@ -284,7 +385,7 @@ export default function AuditLogsPage() {
               Page {page} of {totalPages}
             </span>
             <button
-              className="px-3 py-1 border rounded-md text-sm disabled:opacity-50"
+              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages || loading}
             >

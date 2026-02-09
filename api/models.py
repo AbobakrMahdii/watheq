@@ -12,6 +12,18 @@ class UserCreate(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserInDB(BaseModel):
     id: Optional[str]
     name: str
@@ -26,6 +38,7 @@ class UserLogin(BaseModel):
 
 class DocumentTypeBase(BaseModel):
     name: str
+    folder_name: str  # Required - maps to ai/data/refrences/{folder_name}
     is_active: bool = True
     requires_back_image: bool = False
 
@@ -36,6 +49,7 @@ class DocumentTypeCreate(DocumentTypeBase):
 
 class DocumentTypeUpdate(DocumentTypeBase):
     name: Optional[str] = None
+    folder_name: Optional[str] = None
     is_active: Optional[bool] = None
     requires_back_image: Optional[bool] = None
 
@@ -50,7 +64,7 @@ class DocumentTypeInDB(DocumentTypeBase):
 
 class DocumentTypePublic(DocumentTypeBase):
     id: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -92,11 +106,10 @@ class VerificationStage(str, Enum):
     DOCUMENT_IMAGE_QUALITY = "DOCUMENT_IMAGE_QUALITY"
     DOCUMENT_CROPPING = "DOCUMENT_CROPPING"
     DOCUMENT_FACE_EXTRACTION = "DOCUMENT_FACE_EXTRACTION"
-    SELFIE_LIVENESS = "SELFIE_LIVENESS"
     FACE_MATCHING = "FACE_MATCHING"
-    BIOMETRIC = "BIOMETRIC"
-    ML = "ML"
     OCR = "OCR"
+    AI_VERIFICATION = "AI_VERIFICATION"
+    DATA_VERIFICATION = "DATA_VERIFICATION"
     BLOCKCHAIN = "BLOCKCHAIN"
 
 
@@ -126,7 +139,10 @@ class VerificationStepPublic(BaseModel):
 class VerificationPublic(BaseModel):
     id: int
     user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
     document_type_id: Optional[int] = None
+    document_type_name: Optional[str] = None
     status: VerificationStatus
     current_stage: Optional[VerificationStage] = None
     error_message: Optional[str] = None

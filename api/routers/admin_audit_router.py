@@ -7,6 +7,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import Response
 from fpdf import FPDF
+from fpdf.errors import FPDFException
 from openpyxl import Workbook
 
 from api.database import get_audit_log_collection
@@ -32,6 +33,8 @@ async def list_audit_logs(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     query: Optional[str] = None,
+    sort_by: Optional[str] = Query("created_at"),
+    sort_order: Optional[str] = Query("desc"),
 ):
     collection = get_audit_log_collection()
     filters = {
@@ -45,7 +48,9 @@ async def list_audit_logs(
         "query": query,
     }
     offset = (page - 1) * page_size
-    items = await collection.list(filters, limit=page_size, offset=offset)
+    items = await collection.list(
+        filters, limit=page_size, offset=offset, sort_by=sort_by, sort_order=sort_order
+    )
     total = await collection.count(filters)
 
     return {
@@ -64,6 +69,28 @@ def _format_value(value: Any) -> str:
     return str(value)
 
 
+def _soft_wrap(text: str, chunk: int = 40) -> str:
+    """Insert spaces into very long tokens to avoid FPDF line-break errors."""
+    if not text:
+        return ""
+    parts = []
+    for token in text.split(" "):
+        if len(token) <= chunk:
+            parts.append(token)
+            continue
+        pieces = [token[i : i + chunk] for i in range(0, len(token), chunk)]
+        parts.append(" ".join(pieces))
+    return " ".join(parts)
+
+
+def _safe_pdf_text(text: str, chunk: int = 40) -> str:
+    if not text:
+        return ""
+    safe = _soft_wrap(text.replace("\n", " ").replace("\r", " "), chunk=chunk)
+    # FPDF core expects latin-1 when not using a unicode font.
+    return safe.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _find_font_path() -> Optional[str]:
     candidates = [
         Path("C:/Windows/Fonts/arial.ttf"),
@@ -79,7 +106,10 @@ def _find_font_path() -> Optional[str]:
 
 def _build_pdf(items: list[dict[str, Any]]) -> bytes:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=12)
+    margin = 12
+    pdf.set_auto_page_break(auto=True, margin=margin)
+    pdf.set_left_margin(margin)
+    pdf.set_right_margin(margin)
     pdf.add_page()
 
     font_path = _find_font_path()
@@ -89,37 +119,35 @@ def _build_pdf(items: list[dict[str, Any]]) -> bytes:
     else:
         pdf.set_font("Helvetica", size=9)
 
-    header = " | ".join([
-        "Time",
-        "User",
-        "Role",
-        "Operation",
-        "Status",
-        "Module",
-        "Path",
-        "File",
-        "Size",
-        "Failure",
-    ])
-    pdf.multi_cell(0, 6, header)
-    pdf.ln(1)
+    def _pdf_kv(label: str, value: Any, line_height: float = 5.0, label_width: float = 35.0) -> None:
+        width = pdf.w - pdf.l_margin - pdf.r_margin
+        label_text = (label or "").strip()
+        value_text = _safe_pdf_text(_format_value(value), chunk=30)
+        pdf.cell(label_width, line_height, label_text, ln=0)
+        remaining = max(10.0, width - label_width)
+        pdf.multi_cell(remaining, line_height, value_text)
+
+    pdf.set_font_size(12)
+    pdf.cell(0, 8, "Audit Logs Export", ln=1)
+    pdf.set_font_size(9)
 
     for item in items:
-        line = " | ".join([
-            _format_value(item.get("created_at")),
-            _format_value(item.get("user_name") or item.get("user_email")),
-            _format_value(item.get("user_role")),
-            _format_value(item.get("operation_type")),
-            _format_value(item.get("status")),
-            _format_value(item.get("module")),
-            _format_value(item.get("path")),
-            _format_value(item.get("file_name")),
-            _format_value(item.get("file_size")),
-            _format_value(item.get("failure_reason")),
-        ])
-        pdf.multi_cell(0, 5, line)
+        _pdf_kv("Time", item.get("created_at"))
+        _pdf_kv("User", item.get("user_name") or item.get("user_email"))
+        _pdf_kv("Role", item.get("user_role"))
+        _pdf_kv("Operation", item.get("operation_type"))
+        _pdf_kv("Status", item.get("status"))
+        _pdf_kv("Module", item.get("module"))
+        _pdf_kv("Path", item.get("path"))
+        _pdf_kv("File", item.get("file_name"))
+        _pdf_kv("Size", item.get("file_size"))
+        _pdf_kv("Failure", item.get("failure_reason"))
+        pdf.ln(2)
 
-    return pdf.output(dest="S").encode("latin-1", errors="ignore")
+    raw = pdf.output(dest="S")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    return str(raw).encode("latin-1", errors="ignore")
 
 
 def _build_excel(items: list[dict[str, Any]]) -> bytes:
@@ -146,22 +174,24 @@ def _build_excel(items: list[dict[str, Any]]) -> bytes:
     ws.append(headers)
 
     for item in items:
-        ws.append([
-            _format_value(item.get("created_at")),
-            _format_value(item.get("user_name")),
-            _format_value(item.get("user_email")),
-            _format_value(item.get("user_role")),
-            _format_value(item.get("operation_type")),
-            _format_value(item.get("status")),
-            _format_value(item.get("module")),
-            _format_value(item.get("path")),
-            _format_value(item.get("method")),
-            _format_value(item.get("file_name")),
-            _format_value(item.get("file_ext")),
-            _format_value(item.get("file_size")),
-            _format_value(item.get("failure_reason")),
-            _format_value(item.get("extra_data")),
-        ])
+        ws.append(
+            [
+                _format_value(item.get("created_at")),
+                _format_value(item.get("user_name")),
+                _format_value(item.get("user_email")),
+                _format_value(item.get("user_role")),
+                _format_value(item.get("operation_type")),
+                _format_value(item.get("status")),
+                _format_value(item.get("module")),
+                _format_value(item.get("path")),
+                _format_value(item.get("method")),
+                _format_value(item.get("file_name")),
+                _format_value(item.get("file_ext")),
+                _format_value(item.get("file_size")),
+                _format_value(item.get("failure_reason")),
+                _format_value(item.get("extra_data")),
+            ]
+        )
 
     stream = BytesIO()
     wb.save(stream)

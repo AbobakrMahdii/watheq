@@ -5,6 +5,7 @@ import '../../../core/constants/app_dimensions.dart';
 import '../../../features/verification/models/verification_models.dart';
 import '../../../features/verification/services/verification_orchestrator_service.dart';
 import '../../../ui/widgets/app_snackbars.dart';
+import '../../verification/verification_details_screen.dart';
 
 class VerificationHistoryScreen extends StatefulWidget {
   const VerificationHistoryScreen({super.key});
@@ -27,8 +28,9 @@ class _VerificationHistoryScreenState extends State<VerificationHistoryScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final summary =
-          await VerificationOrchestratorService.instance.listMy(pageSize: 50);
+      final summary = await VerificationOrchestratorService.instance.listMy(
+        pageSize: 50,
+      );
       if (!mounted) return;
       setState(() => _summary = summary);
     } catch (e) {
@@ -54,67 +56,80 @@ class _VerificationHistoryScreenState extends State<VerificationHistoryScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _summary == null
-              ? const Center(child: Text('لا يوجد بيانات متاحة.'))
-              : Padding(
-                  padding: const EdgeInsets.all(AppDimensions.padLg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          ? const Center(child: Text('لا يوجد بيانات متاحة.'))
+          : Padding(
+              padding: const EdgeInsets.all(AppDimensions.padLg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          _StatChip(label: 'الإجمالي', value: _summary!.total),
-                          _StatChip(
-                              label: 'ناجحة',
-                              value: _summary!.success,
-                              color: Colors.green),
-                          _StatChip(
-                              label: 'قيد التنفيذ',
-                              value: _summary!.running + _summary!.pending,
-                              color: Colors.orange),
-                          _StatChip(
-                              label: 'فاشلة',
-                              value: _summary!.failed,
-                              color: Colors.redAccent),
-                        ],
+                      _StatChip(label: 'الإجمالي', value: _summary!.total),
+                      _StatChip(
+                        label: 'ناجحة',
+                        value: _summary!.success,
+                        color: Colors.green,
                       ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: _summary!.items.isEmpty
-                            ? const Center(
-                                child: Text('لا يوجد سجل تحقق بعد.'),
-                              )
-                            : ListView.separated(
-                                itemCount: _summary!.items.length,
-                                separatorBuilder: (_, __) => const Divider(),
-                                itemBuilder: (_, index) {
-                                  final v = _summary!.items[index];
-                                  final statusColor =
-                                      v.status == VerificationStatus.success
-                                          ? Colors.green
-                                          : (v.status == VerificationStatus.failed
-                                              ? Colors.redAccent
-                                              : Colors.orange);
-                                  return ListTile(
-                                    leading:
-                                        Icon(Icons.verified, color: statusColor),
-                                    title: Text('التحقق #${v.id}'),
-                                    subtitle: Text(
-                                      'الحالة: ${v.status.name.toUpperCase()}'
-                                      '${v.createdAt != null ? " • ${v.createdAt}" : ""}',
-                                    ),
-                                    trailing: const Icon(
-                                      Icons.arrow_forward_ios,
-                                      size: 14,
-                                    ),
-                                  );
-                                },
-                              ),
+                      _StatChip(
+                        label: 'قيد التنفيذ',
+                        value: _summary!.running + _summary!.pending,
+                        color: Colors.orange,
+                      ),
+                      _StatChip(
+                        label: 'فاشلة',
+                        value: _summary!.failed,
+                        color: Colors.redAccent,
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _summary!.items.isEmpty
+                        ? const Center(child: Text('لا يوجد سجل تحقق بعد.'))
+                        : ListView.separated(
+                            itemCount: _summary!.items.length,
+                            separatorBuilder: (_, __) => const Divider(),
+                            itemBuilder: (_, index) {
+                              final v = _summary!.items[index];
+                              final statusColor =
+                                  v.status == VerificationStatus.success
+                                  ? Colors.green
+                                  : (v.status == VerificationStatus.failed
+                                        ? Colors.redAccent
+                                        : Colors.orange);
+                              return ListTile(
+                                leading: Icon(
+                                  Icons.verified,
+                                  color: statusColor,
+                                ),
+                                title: Text('التحقق #${v.id}'),
+                                subtitle: Text(
+                                  'الحالة: ${v.status.name.toUpperCase()}'
+                                  '${v.createdAt != null ? " • ${v.createdAt}" : ""}',
+                                ),
+                                trailing: const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 14,
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => VerificationDetailsScreen(
+                                        verificationId: v.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

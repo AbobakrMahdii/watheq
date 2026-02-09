@@ -1,0 +1,24 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download & install MultiChain 2.3.3 (Linux 64-bit)
+RUN wget -q https://www.multichain.com/download/multichain-2.3.3.tar.gz -O /tmp/mc.tar.gz && \
+    tar -xzf /tmp/mc.tar.gz -C /tmp && \
+    cp /tmp/multichain-2.3.3/multichaind        /usr/local/bin/ && \
+    cp /tmp/multichain-2.3.3/multichain-cli     /usr/local/bin/ && \
+    cp /tmp/multichain-2.3.3/multichain-util    /usr/local/bin/ && \
+    rm -rf /tmp/mc.tar.gz /tmp/multichain-2.3.3
+
+RUN mkdir -p /root/.multichain
+
+COPY entrypoint-multichain.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# 4402 = JSON-RPC,  4403 = peer-to-peer
+EXPOSE 4402 4403
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,23 @@
+services:
+  multichain:
+    build:
+      context: .
+      dockerfile: Dockerfile.multichain
+    container_name: multichain-node
+    restart: unless-stopped
+
+    ports:
+      - "4402:4402"   # JSON-RPC
+      - "4403:4403"   # Peer-to-peer
+
+    volumes:
+      - multichain_data:/root/.multichain
+
+    environment:
+      CHAIN_NAME: watheqchain
+      RPC_PORT: "4402"
+      RPC_USER: watheqrpc
+      RPC_PASS: watheqrpcpass
+
+volumes:
+  multichain_data:

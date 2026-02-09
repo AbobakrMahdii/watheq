@@ -9,6 +9,7 @@ import '../../features/verification/models/ipfs_pin_result.dart';
 import '../../features/verification/models/verification_models.dart';
 import '../../features/verification/services/verification_orchestrator_service.dart';
 import '../../features/verification/services/submit_verification_service.dart';
+import '../../features/verification/services/verification_tracker.dart';
 import '../../ui/widgets/app_snackbars.dart';
 
 class VerificationResultScreen extends StatefulWidget {
@@ -68,34 +69,48 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
         livenessData: widget.livenessData,
       );
 
+      // Register with the global tracker so it continues if the user leaves.
+      await VerificationTracker.instance.track(record.id);
+
       var current = record;
+      const maxPolls = 120; // stop after ~2 minutes
+      var polls = 0;
       while (current.status == VerificationStatus.pending ||
           current.status == VerificationStatus.running) {
-        current =
-            await VerificationOrchestratorService.instance.getStatus(record.id);
-        final steps =
-            await VerificationOrchestratorService.instance.getSteps(record.id);
+        polls++;
+        if (polls > maxPolls) {
+          throw SubmitVerificationException(
+            'انتهت مهلة انتظار التحقق. حاول مرة أخرى لاحقاً.',
+          );
+        }
+        current = await VerificationOrchestratorService.instance.getStatus(
+          record.id,
+        );
+        final steps = await VerificationOrchestratorService.instance.getSteps(
+          record.id,
+        );
         if (!mounted) return;
         setState(() {
           _steps = steps;
           _currentStage = current.currentStage;
         });
-        if (current.status == VerificationStatus.running) {
+        // Feed the tracker so it doesn't duplicate API calls.
+        VerificationTracker.instance.updateFromExternal(current, steps);
+        if (current.status == VerificationStatus.pending ||
+            current.status == VerificationStatus.running) {
           await Future.delayed(const Duration(seconds: 1));
         }
       }
 
       if (current.status == VerificationStatus.failed) {
-        throw SubmitVerificationException(
-          current.errorMessage ?? 'فشل التحقق',
-        );
+        throw SubmitVerificationException(current.errorMessage ?? 'فشل التحقق');
       }
 
       final data = current.resultData ?? {};
       final facePayload =
           (data['FACE_MATCHING'] as Map?)?.cast<String, dynamic>() ??
-              (data['BIOMETRIC'] as Map?)?.cast<String, dynamic>() ??
-              {};
+          (data['BIOMETRIC'] as Map?)?.cast<String, dynamic>() ??
+          {};
       final face = FaceVerifyResult.fromJson(facePayload);
       final ocr = (data['OCR'] as Map?)?.cast<String, dynamic>() ?? {};
       final blockchain =
@@ -105,12 +120,16 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
         'filename': blockchain['filename'] ?? '',
       });
 
-      final ml = (data['ML'] as Map?)?.cast<String, dynamic>() ?? {};
-      _documentDecision = ml['final_decision'] as String?;
-      final percent = ml['authenticity_percent'];
+      final ai =
+          (data['AI_VERIFICATION'] as Map?)?.cast<String, dynamic>() ?? {};
+      _documentDecision = ai['final_decision'] as String?;
+      final percent = ai['authenticity_percent'];
       if (percent is num) {
         _documentPercent = percent.toDouble();
       }
+
+      final dataVerification =
+          (data['DATA_VERIFICATION'] as Map?)?.cast<String, dynamic>() ?? {};
 
       final result = SubmitVerificationResult(
         face: face,
@@ -118,7 +137,8 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
         ocr: ocr,
         docId: blockchain['doc_id'] ?? '',
         sha256: blockchain['sha256'] ?? '',
-        ledgerRecorded: blockchain['ledger_recorded'] == true,
+        aiElements: (ai['elements'] as Map?)?.cast<String, dynamic>() ?? {},
+        dataVerificationResult: dataVerification,
       );
 
       if (!mounted) return;
@@ -126,9 +146,13 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
         _result = result;
         _isLoading = false;
       });
+      // Verification finished on-screen — dismiss the tracker (no notification needed).
+      await VerificationTracker.instance.dismiss();
     } catch (e) {
       if (!mounted) return;
-      final message = e is SubmitVerificationException ? e.message : e.toString();
+      final message = e is SubmitVerificationException
+          ? e.message
+          : e.toString();
       setState(() {
         _error = message;
         _isLoading = false;
@@ -149,14 +173,14 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
             child: _isLoading
                 ? _ProgressView(steps: _steps, currentStage: _currentStage)
                 : _error != null
-                    ? _ErrorView(message: _error!, onRetry: _run, steps: _steps)
-                    : _ResultView(
-                        result: _result!,
-                        documentTypeName: widget.documentTypeName,
-                        documentDecision: _documentDecision,
-                        documentPercent: _documentPercent,
-                        steps: _steps,
-                      ),
+                ? _ErrorView(message: _error!, onRetry: _run, steps: _steps)
+                : _ResultView(
+                    result: _result!,
+                    documentTypeName: widget.documentTypeName,
+                    documentDecision: _documentDecision,
+                    documentPercent: _documentPercent,
+                    steps: _steps,
+                  ),
           ),
         ),
       ),
@@ -172,29 +196,6 @@ class _ProgressView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String labelForStage(VerificationStage stage) {
-      switch (stage) {
-        case VerificationStage.documentImageQuality:
-          return 'Document Quality';
-        case VerificationStage.documentCropping:
-          return 'Document Cropping';
-        case VerificationStage.documentFaceExtraction:
-          return 'Document Face';
-        case VerificationStage.selfieLiveness:
-          return 'Selfie Liveness';
-        case VerificationStage.faceMatching:
-          return 'Face Matching';
-        case VerificationStage.biometric:
-          return 'Biometric';
-        case VerificationStage.ml:
-          return 'ML';
-        case VerificationStage.ocr:
-          return 'OCR';
-        case VerificationStage.blockchain:
-          return 'Blockchain';
-      }
-    }
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.padLg),
@@ -211,7 +212,13 @@ class _ProgressView extends StatelessWidget {
             if (steps.isNotEmpty)
               ...steps.map((step) {
                 final isActive = currentStage == step.stage;
-                final statusText = step.status.name.toUpperCase();
+                final statusText = step.status == VerificationStatus.success
+                    ? 'تم'
+                    : step.status == VerificationStatus.failed
+                    ? 'فشل'
+                    : step.status == VerificationStatus.running
+                    ? 'قيد التنفيذ'
+                    : 'في الانتظار';
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
@@ -220,21 +227,27 @@ class _ProgressView extends StatelessWidget {
                         step.status == VerificationStatus.success
                             ? Icons.check_circle
                             : step.status == VerificationStatus.failed
-                                ? Icons.error
-                                : Icons.timelapse,
+                            ? Icons.error
+                            : isActive
+                            ? Icons.timelapse
+                            : stageIcon(step.stage),
                         size: 18,
                         color: step.status == VerificationStatus.success
                             ? AppColors.success
                             : step.status == VerificationStatus.failed
-                                ? AppColors.danger
-                                : AppColors.textSecondary,
+                            ? AppColors.danger
+                            : isActive
+                            ? AppColors.primary
+                            : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '${labelForStage(step.stage)} - $statusText',
+                          '${stageArabicLabel(step.stage)} - $statusText',
                           style: TextStyle(
-                            fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                            fontWeight: isActive
+                                ? FontWeight.w800
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
@@ -302,7 +315,7 @@ class _ResultView extends StatelessWidget {
   });
 
   final SubmitVerificationResult result;
-  final String documentTypeName; // Display name
+  final String documentTypeName;
   final String? documentDecision;
   final double? documentPercent;
   final List<VerificationStep> steps;
@@ -315,6 +328,7 @@ class _ResultView extends StatelessWidget {
 
     return ListView(
       children: [
+        // ---------- Steps summary ----------
         if (steps.isNotEmpty) ...[
           Card(
             child: Padding(
@@ -324,6 +338,8 @@ class _ResultView extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
+
+        // ---------- Face matching ----------
         Card(
           child: Padding(
             padding: const EdgeInsets.all(AppDimensions.padLg),
@@ -362,7 +378,7 @@ class _ResultView extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'النموذج: ${result.face.model} • المعيار: ${result.face.distanceMetric}',
+                  'عتبة القبول: ${result.face.acceptThresholdPercent.toStringAsFixed(1)}%',
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
               ],
@@ -370,6 +386,8 @@ class _ResultView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+
+        // ---------- AI Verification (per-element details) ----------
         Card(
           child: Padding(
             padding: const EdgeInsets.all(AppDimensions.padLg),
@@ -381,14 +399,17 @@ class _ResultView extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 10),
-                if (documentPercent != null || (documentDecision ?? '').isNotEmpty)
+                if (documentPercent != null ||
+                    (documentDecision ?? '').isNotEmpty)
                   Row(
                     children: [
                       Icon(
                         (documentDecision ?? '').toUpperCase() == 'AUTHENTIC'
                             ? Icons.verified
                             : Icons.info_outline,
-                        color: (documentDecision ?? '').toUpperCase() == 'AUTHENTIC'
+                        color:
+                            (documentDecision ?? '').toUpperCase() ==
+                                'AUTHENTIC'
                             ? AppColors.success
                             : AppColors.textSecondary,
                       ),
@@ -405,15 +426,209 @@ class _ResultView extends StatelessWidget {
                       ),
                     ],
                   ),
-                if (documentPercent != null || (documentDecision ?? '').isNotEmpty)
+                // Per-element AI results
+                if (result.aiElements.isNotEmpty) ...[
                   const SizedBox(height: 10),
+                  const Divider(),
+                  const Text(
+                    'تفاصيل العناصر',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...result.aiElements.entries.map((entry) {
+                    final elementData = entry.value is Map
+                        ? entry.value as Map
+                        : {};
+                    final conf = elementData['confidence'];
+                    final status = elementData['status']?.toString() ?? '';
+                    final confText = conf is num
+                        ? '${(conf * 100).toStringAsFixed(0)}%'
+                        : '';
+                    final isOk =
+                        status.toUpperCase() == 'OK' ||
+                        status.toUpperCase() == 'PASS';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isOk ? Icons.check : Icons.warning_amber,
+                            size: 16,
+                            color: isOk
+                                ? AppColors.success
+                                : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text(entry.key)),
+                          Text(
+                            confText,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ---------- Data Verification ----------
+        if (result.dataVerificationResult.isNotEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.padLg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'مطابقة البيانات',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 10),
+                  // Fraud alert
+                  if (result.dataVerificationResult['fraud_suspected'] == true)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withOpacity(0.1),
+                        border: Border.all(color: AppColors.danger),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: AppColors.danger,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'محاولة احتيال — بيانات الوثيقة لا تطابق السجل المحفوظ',
+                              style: TextStyle(
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // New record info
+                  if (result.dataVerificationResult['new_record_created'] ==
+                      true)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        border: Border.all(color: Colors.blue),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.person_add, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'سجل مواطن جديد — تم حفظ البيانات المستخرجة لأول مرة',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        result.dataVerificationResult['citizen_found'] == true
+                            ? Icons.person_search
+                            : result.dataVerificationResult['new_record_created'] ==
+                                  true
+                            ? Icons.person_add
+                            : Icons.person_off,
+                        color:
+                            result.dataVerificationResult['citizen_found'] ==
+                                true
+                            ? AppColors.success
+                            : result.dataVerificationResult['new_record_created'] ==
+                                  true
+                            ? Colors.blue
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          result.dataVerificationResult['message']
+                                  ?.toString() ??
+                              '',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (result.dataVerificationResult['match_details'] is Map &&
+                      (result.dataVerificationResult['match_details'] as Map)
+                          .isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...(result.dataVerificationResult['match_details'] as Map)
+                        .entries
+                        .map((e) {
+                          final detail = e.value is Map ? e.value as Map : {};
+                          final matched = detail['match'] == true;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  matched ? Icons.check : Icons.close,
+                                  size: 16,
+                                  color: matched
+                                      ? AppColors.success
+                                      : AppColors.danger,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(child: Text(e.key.toString())),
+                              ],
+                            ),
+                          );
+                        }),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        if (result.dataVerificationResult.isNotEmpty)
+          const SizedBox(height: 12),
+
+        // ---------- Blockchain ----------
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimensions.padLg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'تسجيل البلوكتشين',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     const Icon(Icons.shield_outlined, color: AppColors.primary),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'تم تسجيل بصمة الوثيقة (SHA256) على السجل (Blockchain) وربطها مع CID في IPFS.',
+                        'تم تسجيل بصمة الوثيقة (SHA256) على البلوكتشين وربطها مع CID في IPFS.',
                       ),
                     ),
                   ],
@@ -428,6 +643,8 @@ class _ResultView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+
+        // ---------- OCR ----------
         Card(
           child: Padding(
             padding: const EdgeInsets.all(AppDimensions.padLg),
@@ -440,7 +657,9 @@ class _ResultView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  result.ocr.isEmpty ? 'لا توجد بيانات' : result.ocr.toString(),
+                  result.ocr.isEmpty
+                      ? 'لا توجد بيانات'
+                      : result.ocr['text']?.toString() ?? result.ocr.toString(),
                   style: const TextStyle(color: AppColors.textSecondary),
                 ),
               ],
@@ -480,29 +699,6 @@ class _StepsSummary extends StatelessWidget {
 
   final List<VerificationStep> steps;
 
-  String _label(VerificationStage stage) {
-    switch (stage) {
-      case VerificationStage.documentImageQuality:
-        return 'Document Quality';
-      case VerificationStage.documentCropping:
-        return 'Document Cropping';
-      case VerificationStage.documentFaceExtraction:
-        return 'Document Face';
-      case VerificationStage.selfieLiveness:
-        return 'Selfie Liveness';
-      case VerificationStage.faceMatching:
-        return 'Face Matching';
-      case VerificationStage.biometric:
-        return 'Biometric';
-      case VerificationStage.ml:
-        return 'ML';
-      case VerificationStage.ocr:
-        return 'OCR';
-      case VerificationStage.blockchain:
-        return 'Blockchain';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -517,10 +713,10 @@ class _StepsSummary extends StatelessWidget {
           final statusText = step.status == VerificationStatus.success
               ? 'تم'
               : step.status == VerificationStatus.failed
-                  ? 'فشل'
-                  : step.status == VerificationStatus.running
-                      ? 'قيد التنفيذ'
-                      : 'في الانتظار';
+              ? 'فشل'
+              : step.status == VerificationStatus.running
+              ? 'قيد التنفيذ'
+              : 'في الانتظار';
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -529,17 +725,19 @@ class _StepsSummary extends StatelessWidget {
                   step.status == VerificationStatus.success
                       ? Icons.check_circle
                       : step.status == VerificationStatus.failed
-                          ? Icons.error
-                          : Icons.timelapse,
+                      ? Icons.error
+                      : stageIcon(step.stage),
                   size: 18,
                   color: step.status == VerificationStatus.success
                       ? AppColors.success
                       : step.status == VerificationStatus.failed
-                          ? AppColors.danger
-                          : AppColors.textSecondary,
+                      ? AppColors.danger
+                      : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 8),
-                Expanded(child: Text('${_label(step.stage)} - $statusText')),
+                Expanded(
+                  child: Text('${stageArabicLabel(step.stage)} - $statusText'),
+                ),
               ],
             ),
           );
