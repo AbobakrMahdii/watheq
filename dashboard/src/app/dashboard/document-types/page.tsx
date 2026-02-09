@@ -4,6 +4,9 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { SortableHeader } from "@/components/sortable-header";
+import { useSortState } from "@/hooks/use-sort-state";
+import { sortLocally } from "@/lib/sort-utils";
 
 // Assuming these models exist in the backend types or are defined locally
 type DocumentType = {
@@ -38,6 +41,7 @@ export default function DocumentTypesPage() {
   const [formIsActive, setFormIsActive] = useState(true);
   const [formRequiresBackImage, setFormRequiresBackImage] = useState(false);
   const [editingDocTypeId, setEditingDocTypeId] = useState<number | null>(null);
+  const { sortBy, sortOrder, toggleSort } = useSortState("id", "asc");
 
   async function loadDocumentTypes() {
     setLoading(true);
@@ -102,7 +106,10 @@ export default function DocumentTypesPage() {
       }
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || (editingDocTypeId ? "Failed to update document type" : "Failed to create document type"));
+      if (!res.ok)
+        throw new Error(
+          data?.message || (editingDocTypeId ? "Failed to update document type" : "Failed to create document type"),
+        );
 
       toast.success(editingDocTypeId ? "Document type updated" : "Document type created");
       resetForm();
@@ -162,8 +169,8 @@ export default function DocumentTypesPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="bg-white shadow p-4 mb-4 flex items-center justify-between">
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <header className="mb-4 flex items-center justify-between bg-white p-4 shadow">
         <h1 className="text-2xl font-semibold">Manage Document Types</h1>
         {/* Quick access back to the main admin dashboard. */}
         <Link href="/dashboard" className="text-sm text-slate-600 hover:text-slate-900">
@@ -172,16 +179,18 @@ export default function DocumentTypesPage() {
       </header>
 
       <main className="flex-1 p-6">
-        <div className="bg-white p-4 rounded shadow mb-6">
-          <h2 className="text-xl font-semibold mb-3">{editingDocTypeId ? "Edit Document Type" : "Add New Document Type"}</h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mb-6 rounded bg-white p-4 shadow">
+          <h2 className="mb-3 text-xl font-semibold">
+            {editingDocTypeId ? "Edit Document Type" : "Add New Document Type"}
+          </h2>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-slate-700">Name</label>
               <input
                 type="text"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+                className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
                 required
                 disabled={loading}
               />
@@ -192,19 +201,19 @@ export default function DocumentTypesPage() {
                 type="text"
                 value={formFolderName}
                 onChange={(e) => setFormFolderName(e.target.value)}
-                className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2"
+                className="mt-1 block w-full rounded-md border border-slate-300 p-2 shadow-sm"
                 placeholder="e.g., identity, passport"
                 required
                 disabled={loading}
               />
             </div>
-            <div className="flex items-center gap-4 mt-6 md:mt-1">
+            <div className="mt-6 flex items-center gap-4 md:mt-1">
               <label className="flex items-center text-sm font-medium text-slate-700">
                 <input
                   type="checkbox"
                   checked={formIsActive}
                   onChange={(e) => setFormIsActive(e.target.checked)}
-                  className="form-checkbox h-4 w-4 text-blue-600 border-slate-300 rounded"
+                  className="form-checkbox h-4 w-4 rounded border-slate-300 text-blue-600"
                   disabled={loading}
                 />
                 <span className="ml-2">Is Active</span>
@@ -214,16 +223,16 @@ export default function DocumentTypesPage() {
                   type="checkbox"
                   checked={formRequiresBackImage}
                   onChange={(e) => setFormRequiresBackImage(e.target.checked)}
-                  className="form-checkbox h-4 w-4 text-blue-600 border-slate-300 rounded"
+                  className="form-checkbox h-4 w-4 rounded border-slate-300 text-blue-600"
                   disabled={loading}
                 />
                 <span className="ml-2">Requires Back Image</span>
               </label>
             </div>
-            <div className="md:col-span-2 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 md:col-span-2">
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
                 disabled={loading}
               >
                 {editingDocTypeId ? "Update Document Type" : "Add Document Type"}
@@ -232,7 +241,7 @@ export default function DocumentTypesPage() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="bg-slate-300 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-400 disabled:opacity-50"
+                  className="rounded-md bg-slate-300 px-4 py-2 text-slate-800 hover:bg-slate-400 disabled:opacity-50"
                   disabled={loading}
                 >
                   Cancel Edit
@@ -242,46 +251,122 @@ export default function DocumentTypesPage() {
           </form>
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="text-xl font-semibold mb-3">Existing Document Types</h2>
+        <div className="rounded bg-white p-4 shadow">
+          <h2 className="mb-3 text-xl font-semibold">Existing Document Types</h2>
           {documentTypes.length === 0 && !loading ? (
             <p className="text-slate-500">No document types found. Add one above!</p>
           ) : (
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Folder</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Active</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Back Image</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created At</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    <SortableHeader
+                      label="ID"
+                      field="id"
+                      currentSortBy={sortBy}
+                      currentSortOrder={sortOrder}
+                      onSort={toggleSort}
+                      className="text-xs text-slate-500 uppercase"
+                    />
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    <SortableHeader
+                      label="Name"
+                      field="name"
+                      currentSortBy={sortBy}
+                      currentSortOrder={sortOrder}
+                      onSort={toggleSort}
+                      className="text-xs text-slate-500 uppercase"
+                    />
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    <SortableHeader
+                      label="Folder"
+                      field="folder_name"
+                      currentSortBy={sortBy}
+                      currentSortOrder={sortOrder}
+                      onSort={toggleSort}
+                      className="text-xs text-slate-500 uppercase"
+                    />
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    <SortableHeader
+                      label="Active"
+                      field="is_active"
+                      currentSortBy={sortBy}
+                      currentSortOrder={sortOrder}
+                      onSort={toggleSort}
+                      className="text-xs text-slate-500 uppercase"
+                    />
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    Back Image
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    <SortableHeader
+                      label="Created At"
+                      field="created_at"
+                      currentSortBy={sortBy}
+                      currentSortOrder={sortOrder}
+                      onSort={toggleSort}
+                      className="text-xs text-slate-500 uppercase"
+                    />
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-slate-500 uppercase"
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
-                {documentTypes.map((docType) => (
+              <tbody className="divide-y divide-slate-200 bg-white">
+                {sortLocally(documentTypes, sortBy, sortOrder).map((docType) => (
                   <tr key={docType.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{docType.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{docType.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      <code className="bg-slate-100 px-2 py-1 rounded text-xs">{docType.folder_name}</code>
+                    <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-slate-900">{docType.id}</td>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap text-slate-500">{docType.name}</td>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap text-slate-500">
+                      <code className="rounded bg-slate-100 px-2 py-1 text-xs">{docType.folder_name}</code>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${docType.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap text-slate-500">
+                      <span
+                        className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${docType.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+                      >
                         {docType.is_active ? "Yes" : "No"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${docType.requires_back_image ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-800"}`}>
+                    <td className="px-6 py-4 text-sm whitespace-nowrap text-slate-500">
+                      <span
+                        className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${docType.requires_back_image ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-800"}`}
+                      >
                         {docType.requires_back_image ? "Yes" : "No"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{new Date(docType.created_at).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 text-sm whitespace-nowrap text-slate-500">
+                      {new Date(docType.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                       <button
                         onClick={() => startEditing(docType)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        className="mr-4 text-indigo-600 hover:text-indigo-900"
                         disabled={loading}
                       >
                         Edit

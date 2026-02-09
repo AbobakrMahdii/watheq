@@ -6,12 +6,14 @@ import Link from "next/link";
 
 import { toast } from "sonner";
 
+import { SortableHeader } from "@/components/sortable-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useSortState } from "@/hooks/use-sort-state";
 
 /* ---------- Types ---------- */
 type Verification = {
@@ -40,10 +42,13 @@ const STATUS_LABELS: Record<string, string> = {
   SUCCESS: "ناجح",
   FAILED: "فشل",
 };
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  PENDING: "outline",
-  RUNNING: "secondary",
-  SUCCESS: "default",
+const STATUS_VARIANT: Record<
+  string,
+  "default" | "destructive" | "outline" | "secondary" | "success" | "warning" | "info"
+> = {
+  PENDING: "info",
+  RUNNING: "warning",
+  SUCCESS: "success",
   FAILED: "destructive",
 };
 
@@ -73,6 +78,7 @@ export default function VerificationsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const pageSize = 20;
+  const { sortBy, sortOrder, toggleSort } = useSortState("created_at", "desc");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,17 +93,22 @@ export default function VerificationsPage() {
       if (operationType) params.set("operation_type", operationType);
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
+      params.set("sort_by", sortBy);
+      params.set("sort_order", sortOrder);
 
       const res = await fetch(`/api/admin/verifications?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "فشل تحميل البيانات");
       setData(json);
     } catch (e: any) {
-      toast.error(e?.message || "\u062a\u0639\u0630\u0631 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+      toast.error(
+        e?.message ||
+          "\u062a\u0639\u0630\u0631 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631",
+      );
     } finally {
       setLoading(false);
     }
-  }, [page, status, search, userName, operationType, dateFrom, dateTo]);
+  }, [page, status, search, userName, operationType, dateFrom, dateTo, sortBy, sortOrder]);
 
   useEffect(() => {
     load();
@@ -204,10 +215,14 @@ export default function VerificationsPage() {
         <h1 className="text-xl font-semibold">{"\u0627\u0644\u062a\u062d\u0642\u0642\u0627\u062a"}</h1>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={exportData} disabled={exporting}>
-            {exporting ? "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u0635\u062f\u064a\u0631..." : "\u062a\u0635\u062f\u064a\u0631 CSV"}
+            {exporting
+              ? "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u0635\u062f\u064a\u0631..."
+              : "\u062a\u0635\u062f\u064a\u0631 CSV"}
           </Button>
           <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-            {loading ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u0645\u064a\u0644..." : "\u062a\u062d\u062f\u064a\u062b"}
+            {loading
+              ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u0645\u064a\u0644..."
+              : "\u062a\u062d\u062f\u064a\u062b"}
           </Button>
         </div>
       </div>
@@ -297,12 +312,56 @@ export default function VerificationsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-right">#</TableHead>
-              <TableHead className="text-right">المستخدم</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="#"
+                  field="id"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setPage(1);
+                  }}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="المستخدم"
+                  field="user_name"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setPage(1);
+                  }}
+                />
+              </TableHead>
               <TableHead className="text-right">نوع الوثيقة</TableHead>
-              <TableHead className="text-right">الحالة</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="الحالة"
+                  field="status"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setPage(1);
+                  }}
+                />
+              </TableHead>
               <TableHead className="text-right">المرحلة</TableHead>
-              <TableHead className="text-right">التاريخ</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="التاريخ"
+                  field="created_at"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setPage(1);
+                  }}
+                />
+              </TableHead>
               <TableHead className="text-right">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
@@ -349,7 +408,9 @@ export default function VerificationsPage() {
                           onClick={() => downloadReport(v.id)}
                           disabled={reportingId === v.id}
                         >
-                          {reportingId === v.id ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..." : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631"}
+                          {reportingId === v.id
+                            ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..."
+                            : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631"}
                         </Button>
                       </div>
                     </TableCell>

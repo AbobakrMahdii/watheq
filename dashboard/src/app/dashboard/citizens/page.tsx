@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { toast } from "sonner";
 
+import { SortableHeader } from "@/components/sortable-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useSortState } from "@/hooks/use-sort-state";
 
 /* ---------- Types ---------- */
 type Citizen = {
@@ -52,6 +54,7 @@ export default function CitizensPage() {
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const pageSize = 50;
+  const { sortBy, sortOrder, toggleSort } = useSortState("id", "desc");
 
   /* Edit dialog */
   const [editOpen, setEditOpen] = useState(false);
@@ -74,7 +77,9 @@ export default function CitizensPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/citizens?limit=${pageSize}&offset=${offset}`);
+      const res = await fetch(
+        `/api/admin/citizens?limit=${pageSize}&offset=${offset}&sort_by=${sortBy}&sort_order=${sortOrder}`,
+      );
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "فشل تحميل البيانات");
       setCitizens(Array.isArray(json.citizens) ? json.citizens : []);
@@ -83,7 +88,7 @@ export default function CitizensPage() {
     } finally {
       setLoading(false);
     }
-  }, [offset]);
+  }, [offset, sortBy, sortOrder]);
 
   useEffect(() => {
     load();
@@ -179,13 +184,79 @@ export default function CitizensPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-right">الرقم الوطني</TableHead>
-              <TableHead className="text-right">الاسم بالعربي</TableHead>
-              <TableHead className="text-right">الاسم بالإنجليزي</TableHead>
-              <TableHead className="text-right">تاريخ الميلاد</TableHead>
-              <TableHead className="text-right">الجنس</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="الرقم الوطني"
+                  field="national_id"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setOffset(0);
+                  }}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="الاسم بالعربي"
+                  field="full_name_ar"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setOffset(0);
+                  }}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="الاسم بالإنجليزي"
+                  field="full_name_en"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setOffset(0);
+                  }}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="تاريخ الميلاد"
+                  field="date_of_birth"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setOffset(0);
+                  }}
+                />
+              </TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="الجنس"
+                  field="gender"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setOffset(0);
+                  }}
+                />
+              </TableHead>
               <TableHead className="text-right">نوع الوثيقة</TableHead>
-              <TableHead className="text-right">تاريخ الإنشاء</TableHead>
+              <TableHead className="text-right">
+                <SortableHeader
+                  label="تاريخ الإنشاء"
+                  field="created_at"
+                  currentSortBy={sortBy}
+                  currentSortOrder={sortOrder}
+                  onSort={(f) => {
+                    toggleSort(f);
+                    setOffset(0);
+                  }}
+                />
+              </TableHead>
               <TableHead className="text-right">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
