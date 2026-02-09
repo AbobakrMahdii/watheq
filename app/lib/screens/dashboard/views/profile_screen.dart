@@ -73,14 +73,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openAdminDashboard() async {
-    final baseUrl = ConnectionConfigService.instance.baseUrl;
-    final dashboardUrl = '$baseUrl/dashboard';
-    final uri = Uri.parse(dashboardUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    try {
+      final baseUrl = ConnectionConfigService.instance.baseUrl;
+      final dashboardUrl = '$baseUrl/dashboard';
+      final uri = Uri.parse(dashboardUrl);
+      
+      // Try to launch with platform default mode (works better on Android)
+      final launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      
+      if (!launched && mounted) {
+        AppSnackbars.error(context, 'تعذر فتح لوحة التحكم - لم يتم العثور على متصفح');
+      }
+    } catch (e) {
       if (mounted) {
-        AppSnackbars.error(context, 'تعذر فتح لوحة التحكم');
+        AppSnackbars.error(context, 'خطأ في فتح لوحة التحكم: ${e.toString()}');
       }
     }
   }
