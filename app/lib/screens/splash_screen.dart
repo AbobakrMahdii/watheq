@@ -37,27 +37,17 @@ class _SplashScreenState extends State<SplashScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 76,
-                height: 76,
+                width: 150,
+                height: 150,
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(Icons.verified_user, size: 34),
+                child: Image.asset("assets/logo.jpeg"),
               ),
-              const SizedBox(height: 14),
-              const Text(
-                'Watheq',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.2,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 25),
               const Text(
                 'جارٍ التحقق من الجلسة...',
                 style: TextStyle(color: AppColors.textSecondary),
