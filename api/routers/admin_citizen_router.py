@@ -63,33 +63,66 @@ def _find_font_path() -> Optional[str]:
 
 def _build_citizens_pdf(rows: list[dict]) -> bytes:
     from fpdf import FPDF
+    def _pdf_write_line(text: str, line_height: float = 5.0) -> None:
+        width = pdf.w - pdf.l_margin - pdf.r_margin
+        text = (text or "").replace("\n", " ").strip()
+        if not text:
+            pdf.ln(line_height)
+            return
+        words = text.split(" ")
+        line = ""
+        for word in words:
+            candidate = word if not line else f"{line} {word}"
+            if pdf.get_string_width(candidate) <= width:
+                line = candidate
+                continue
+            if line:
+                pdf.cell(0, line_height, line, ln=1)
+                line = ""
+            if pdf.get_string_width(word) <= width:
+                line = word
+            else:
+                chunk = ""
+                for ch in word:
+                    if pdf.get_string_width(chunk + ch) <= width:
+                        chunk += ch
+                    else:
+                        if chunk:
+                            pdf.cell(0, line_height, chunk, ln=1)
+                        chunk = ch
+                line = chunk
+        if line:
+            pdf.cell(0, line_height, line, ln=1)
 
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
 
     font_path = _find_font_path()
     if font_path:
         pdf.add_font("ReportFont", "", font_path, uni=True)
-        pdf.set_font("ReportFont", size=10)
+        pdf.set_font("ReportFont", size=9)
     else:
-        pdf.set_font("Helvetica", size=10)
+        pdf.set_font("Helvetica", size=9)
 
-    pdf.set_font_size(14)
+    pdf.set_font_size(12)
     pdf.cell(0, 8, "Citizens Export", ln=1)
-    pdf.set_font_size(10)
+    pdf.set_font_size(9)
 
     for row in rows:
-        line = (
-            f"NID: {row.get('national_id','')} | "
-            f"Name AR: {row.get('full_name_ar','')} | "
-            f"Name EN: {row.get('full_name_en','')} | "
-            f"Doc: {row.get('document_type','')} | "
-            f"DOB: {row.get('date_of_birth','')}"
-        )
-        pdf.multi_cell(0, 5, line)
+        _pdf_write_line(f"NID: {row.get('national_id','')}")
+        _pdf_write_line(f"Name AR: {row.get('full_name_ar','')}")
+        _pdf_write_line(f"Name EN: {row.get('full_name_en','')}")
+        _pdf_write_line(f"Doc: {row.get('document_type','')}")
+        _pdf_write_line(f"DOB: {row.get('date_of_birth','')}")
+        _pdf_write_line(f"Address: {row.get('address','')}")
+        _pdf_write_line(f"Issue: {row.get('issue_date','')}  Expiry: {row.get('expiry_date','')}")
+        pdf.ln(2)
 
-    return pdf.output(dest="S").encode("latin-1", errors="ignore")
+    raw = pdf.output(dest="S")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    return str(raw).encode("latin-1", errors="ignore")
 
 
 @router.get("")
