@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
+import '../../features/auth/models/user_profile.dart';
+import '../../features/auth/services/auth_service.dart';
 import '../../features/verification/models/verification_models.dart';
 import '../../features/verification/services/verification_orchestrator_service.dart';
 import '../../features/verification/services/verification_tracker.dart';
@@ -26,6 +28,7 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
   VerificationRecord? _record;
   List<VerificationStep> _steps = [];
   String? _error;
+  UserProfile? _profile;
 
   @override
   void initState() {
@@ -45,10 +48,12 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
       final steps = await VerificationOrchestratorService.instance.getSteps(
         widget.verificationId,
       );
+      final profile = await AuthService.instance.fetchProfile();
       if (!mounted) return;
       setState(() {
         _record = record;
         _steps = steps;
+        _profile = profile;
         _loading = false;
       });
 
@@ -66,6 +71,11 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
       });
       AppSnackbars.error(context, _error!);
     }
+  }
+
+  bool _isAdmin() {
+    final role = _profile?.role ?? '';
+    return role == 'super_admin' || role == 'admin';
   }
 
   // ─── helpers ──────────────────────────────────────────────────────
@@ -246,7 +256,8 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
           _buildDataVerificationCard(data),
 
         // ── Blockchain ──
-        if (data.containsKey('BLOCKCHAIN')) _buildBlockchainCard(data),
+        if (_isAdmin() && data.containsKey('BLOCKCHAIN'))
+          _buildBlockchainCard(data),
 
         // ── OCR ──
         if (data.containsKey('OCR')) _buildOcrCard(data),
