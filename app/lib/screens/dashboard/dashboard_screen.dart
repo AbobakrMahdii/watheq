@@ -141,9 +141,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               )
             : null,
-        body: IndexedStack(
-          index: _currentIndex,
-          children: [..._screens, const VerificationFab()],
+        body: Stack(
+          children: [
+            IndexedStack(index: _currentIndex, children: _screens),
+            const VerificationFab(),
+          ],
         ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentIndex,
