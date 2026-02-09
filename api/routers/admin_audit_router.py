@@ -7,6 +7,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import Response
 from fpdf import FPDF
+from fpdf.errors import FPDFException
 from openpyxl import Workbook
 
 from api.database import get_audit_log_collection
@@ -68,6 +69,28 @@ def _format_value(value: Any) -> str:
     return str(value)
 
 
+def _soft_wrap(text: str, chunk: int = 40) -> str:
+    """Insert spaces into very long tokens to avoid FPDF line-break errors."""
+    if not text:
+        return ""
+    parts = []
+    for token in text.split(" "):
+        if len(token) <= chunk:
+            parts.append(token)
+            continue
+        pieces = [token[i : i + chunk] for i in range(0, len(token), chunk)]
+        parts.append(" ".join(pieces))
+    return " ".join(parts)
+
+
+def _safe_pdf_text(text: str, chunk: int = 40) -> str:
+    if not text:
+        return ""
+    safe = _soft_wrap(text.replace("\n", " ").replace("\r", " "), chunk=chunk)
+    # FPDF core expects latin-1 when not using a unicode font.
+    return safe.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _find_font_path() -> Optional[str]:
     candidates = [
         Path("C:/Windows/Fonts/arial.ttf"),
@@ -83,7 +106,11 @@ def _find_font_path() -> Optional[str]:
 
 def _build_pdf(items: list[dict[str, Any]]) -> bytes:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=12)
+    margin = 12
+    content_width = 297 - (margin * 2)  # A4 landscape width in mm
+    pdf.set_auto_page_break(auto=True, margin=margin)
+    pdf.set_left_margin(margin)
+    pdf.set_right_margin(margin)
     pdf.add_page()
 
     font_path = _find_font_path()
@@ -107,7 +134,8 @@ def _build_pdf(items: list[dict[str, Any]]) -> bytes:
             "Failure",
         ]
     )
-    pdf.multi_cell(0, 6, header)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(content_width, 6, _safe_pdf_text(header))
     pdf.ln(1)
 
     for item in items:
@@ -125,9 +153,25 @@ def _build_pdf(items: list[dict[str, Any]]) -> bytes:
                 _format_value(item.get("failure_reason")),
             ]
         )
-        pdf.multi_cell(0, 5, line)
+        safe_line = _safe_pdf_text(line, chunk=30)
+        try:
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(content_width, 5, safe_line)
+        except FPDFException:
+            # Fallback: smaller font + stricter wrapping + truncate
+            pdf.set_font(pdf.font_family or "Helvetica", size=8)
+            safe_line = _safe_pdf_text(line, chunk=20)
+            if len(safe_line) > 1000:
+                safe_line = safe_line[:1000] + "..."
+            # Final fallback: write in fixed-size chunks to avoid line-break errors
+            for i in range(0, len(safe_line), 120):
+                pdf.set_x(pdf.l_margin)
+                pdf.multi_cell(content_width, 5, safe_line[i : i + 120])
 
-    return pdf.output(dest="S").encode("latin-1", errors="ignore")
+    raw = pdf.output(dest="S")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    return str(raw).encode("latin-1", errors="ignore")
 
 
 def _build_excel(items: list[dict[str, Any]]) -> bytes:

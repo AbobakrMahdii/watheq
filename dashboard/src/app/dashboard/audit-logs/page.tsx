@@ -50,6 +50,7 @@ export default function AuditLogsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [userName, setUserName] = useState("");
+  const [exporting, setExporting] = useState<null | "pdf" | "xlsx">(null);
   const { sortBy, sortOrder, toggleSort } = useSortState("created_at", "desc");
 
   const totalPages = useMemo(() => {
@@ -80,6 +81,49 @@ export default function AuditLogsPage() {
       toast.error(e?.message || "Failed to load audit logs");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function getExportFilename(headerValue: string | null) {
+    if (!headerValue) return null;
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || null;
+  }
+
+  async function downloadExport(format: "pdf" | "xlsx") {
+    setExporting(format);
+    try {
+      const params = new URLSearchParams();
+      if (userName) params.set("user_name", userName);
+      if (operationType) params.set("operation_type", operationType);
+      if (status) params.set("status", status);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      if (query) params.set("query", query);
+      params.set("format", format);
+
+      const res = await fetch(`/api/admin/audit-logs/export?${params}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Failed to export audit logs");
+      }
+      const blob = await res.blob();
+      const filename =
+        getExportFilename(res.headers.get("content-disposition")) ||
+        `audit_logs_${new Date().toISOString().replace(/[:.]/g, "-")}.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("تم تنزيل التقرير");
+    } catch (e: any) {
+      toast.error(e?.message || "فشل تنزيل التقرير");
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -177,18 +221,22 @@ export default function AuditLogsPage() {
             />
           </div>
           <div className="flex justify-end gap-2 md:col-span-3">
-            <a
-              href="/api/admin/audit-logs/export?format=pdf"
-              className="rounded-md bg-slate-600 px-4 py-2 text-white hover:bg-slate-700"
+            <button
+              type="button"
+              onClick={() => downloadExport("pdf")}
+              disabled={exporting === "pdf"}
+              className="rounded-md bg-slate-600 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-60"
             >
-              Export PDF
-            </a>
-            <a
-              href="/api/admin/audit-logs/export?format=xlsx"
-              className="rounded-md bg-slate-700 px-4 py-2 text-white hover:bg-slate-800"
+              {exporting === "pdf" ? "جارٍ التصدير..." : "تصدير PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadExport("xlsx")}
+              disabled={exporting === "xlsx"}
+              className="rounded-md bg-slate-700 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-60"
             >
-              Export Excel
-            </a>
+              {exporting === "xlsx" ? "جارٍ التصدير..." : "تصدير Excel"}
+            </button>
             <button
               type="submit"
               className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"

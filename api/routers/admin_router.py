@@ -1,10 +1,83 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
+from datetime import datetime, timezone
+import csv
+import io
 
 from api.database import get_user_collection, database
 from ..models import UserCreate, UserUpdate
 from ..security import get_current_admin, get_current_super_admin
 from ..security import get_password_hash
-from datetime import datetime, timezone
+
+
+def _find_font_path() -> str | None:
+    candidates = [
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/arialuni.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+    ]
+    try:
+        from pathlib import Path
+
+        for path in candidates:
+            if Path(path).exists():
+                return path
+    except Exception:
+        return None
+    return None
+
+
+def _safe_pdf_text(value: object) -> str:
+    text = "" if value is None else str(value)
+    try:
+        text.encode("latin-1")
+        return text
+    except Exception:
+        return text.encode("latin-1", errors="ignore").decode("latin-1")
+
+
+def _pdf_write_line(pdf, text: str, line_height: float = 5.0) -> None:
+    width = pdf.w - pdf.l_margin - pdf.r_margin
+    if width <= 0:
+        return
+    text = (text or "").replace("\n", " ").strip()
+    if text:
+        text = (
+            text.replace("_", " _ ")
+            .replace("/", " / ")
+            .replace("\\", " \\ ")
+            .replace("-", " - ")
+        )
+    if not text:
+        pdf.ln(line_height)
+        return
+
+    words = text.split(" ")
+    line = ""
+    for word in words:
+        candidate = word if not line else f"{line} {word}"
+        if pdf.get_string_width(candidate) <= width:
+            line = candidate
+            continue
+        if line:
+            pdf.cell(0, line_height, line, ln=1)
+            line = ""
+        # If the single word is too long, split by chars
+        if pdf.get_string_width(word) <= width:
+            line = word
+        else:
+            chunk = ""
+            for ch in word:
+                if pdf.get_string_width(chunk + ch) <= width:
+                    chunk += ch
+                else:
+                    if chunk:
+                        pdf.cell(0, line_height, chunk, ln=1)
+                    chunk = ch
+            line = chunk
+    if line:
+        pdf.cell(0, line_height, line, ln=1)
 
 
 async def _resolve_user_doc(users, user_id: str) -> dict:
@@ -264,6 +337,10 @@ async def get_analytics(
     date_from: str | None = None,
     date_to: str | None = None,
 ):
+    return await _compute_analytics(date_from=date_from, date_to=date_to)
+
+
+async def _compute_analytics(date_from: str | None = None, date_to: str | None = None) -> dict:
     if not database.is_connected:
         await database.connect()
 
@@ -376,3 +453,130 @@ async def get_analytics(
         "failure_reasons": failure_reasons,
         "avg_processing_time_sec": avg_processing_time,
     }
+
+
+@router.get("/analytics/export")
+async def export_analytics(
+    format: str = Query("csv", description="Export format: csv or pdf"),
+    date_from: str | None = None,
+    date_to: str | None = None,
+    admin=Depends(get_current_admin),
+):
+    fmt = (format or "csv").lower()
+    if fmt not in ("csv", "pdf"):
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+
+    data = await _compute_analytics(date_from=date_from, date_to=date_to)
+
+    if fmt == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["section", "key", "value"])
+
+        for key in (
+            "total_users",
+            "total_admins",
+            "total_verifications",
+            "total_authentications",
+            "total_document_types",
+            "total_audit_logs",
+            "avg_processing_time_sec",
+        ):
+            writer.writerow(["summary", key, data.get(key)])
+
+        for status, count in (data.get("status_breakdown") or {}).items():
+            writer.writerow(["status_breakdown", status, count])
+
+        for row in data.get("by_document_type") or []:
+            writer.writerow(["by_document_type", row.get("type"), row.get("count")])
+
+        for row in data.get("failure_reasons") or []:
+            writer.writerow(["failure_reasons", row.get("reason"), row.get("count")])
+
+        for row in data.get("time_series") or []:
+            writer.writerow(
+                [
+                    "time_series",
+                    row.get("date"),
+                    f"SUCCESS={row.get('SUCCESS',0)};FAILED={row.get('FAILED',0)};RUNNING={row.get('RUNNING',0)};PENDING={row.get('PENDING',0)}",
+                ]
+            )
+
+        filename = f'analytics_export_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+        return Response(
+            output.getvalue().encode("utf-8"),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    # PDF
+    from fpdf import FPDF
+
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+
+    font_path = _find_font_path()
+    if font_path:
+        pdf.add_font("ReportFont", "", font_path, uni=True)
+        pdf.set_font("ReportFont", size=10)
+        safe = lambda s: "" if s is None else str(s)
+    else:
+        pdf.set_font("Helvetica", size=10)
+        safe = _safe_pdf_text
+
+    pdf.set_font_size(12)
+    pdf.cell(0, 8, safe("Analytics Export"), ln=1)
+    pdf.set_font_size(10)
+
+    pdf.cell(0, 6, safe("Summary"), ln=1)
+    for key in (
+        "total_users",
+        "total_admins",
+        "total_verifications",
+        "total_authentications",
+        "total_document_types",
+        "total_audit_logs",
+        "avg_processing_time_sec",
+    ):
+        _pdf_write_line(pdf, safe(f"{key}: {data.get(key)}"))
+
+    pdf.ln(2)
+    pdf.cell(0, 6, safe("Status Breakdown"), ln=1)
+    for status, count in (data.get("status_breakdown") or {}).items():
+        _pdf_write_line(pdf, safe(f"{status}: {count}"))
+
+    pdf.ln(2)
+    pdf.cell(0, 6, safe("By Document Type"), ln=1)
+    for row in data.get("by_document_type") or []:
+        _pdf_write_line(pdf, safe(f"{row.get('type')}: {row.get('count')}"))
+
+    pdf.ln(2)
+    pdf.cell(0, 6, safe("Failure Reasons"), ln=1)
+    for row in data.get("failure_reasons") or []:
+        _pdf_write_line(pdf, safe(f"{row.get('reason')}: {row.get('count')}"))
+
+    pdf.ln(2)
+    pdf.cell(0, 6, safe("Time Series"), ln=1)
+    for row in data.get("time_series") or []:
+        _pdf_write_line(pdf, safe(f"Date: {row.get('date')}"))
+        pdf.set_font_size(9)
+        _pdf_write_line(pdf, safe(f"SUCCESS: {row.get('SUCCESS',0)}"))
+        _pdf_write_line(pdf, safe(f"FAILED: {row.get('FAILED',0)}"))
+        _pdf_write_line(pdf, safe(f"RUNNING: {row.get('RUNNING',0)}"))
+        _pdf_write_line(pdf, safe(f"PENDING: {row.get('PENDING',0)}"))
+        pdf.set_font_size(10)
+        pdf.ln(1)
+
+    filename = f'analytics_export_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.pdf'
+    pdf_bytes = pdf.output(dest="S")
+    if isinstance(pdf_bytes, str):
+        pdf_bytes = pdf_bytes.encode("latin-1", errors="ignore")
+    elif isinstance(pdf_bytes, bytearray):
+        pdf_bytes = bytes(pdf_bytes)
+
+    return Response(
+        pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

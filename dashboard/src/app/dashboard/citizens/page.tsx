@@ -53,6 +53,7 @@ export default function CitizensPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const [exporting, setExporting] = useState<null | "csv" | "pdf">(null);
   const pageSize = 50;
   const { sortBy, sortOrder, toggleSort } = useSortState("id", "desc");
 
@@ -93,6 +94,42 @@ export default function CitizensPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  function getExportFilename(headerValue: string | null) {
+    if (!headerValue) return null;
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || null;
+  }
+
+  async function downloadExport(format: "csv" | "pdf") {
+    setExporting(format);
+    try {
+      const params = new URLSearchParams();
+      params.set("format", format);
+      const res = await fetch(`/api/admin/citizens/export?${params}`, { cache: "no-store" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Failed to export citizens");
+      }
+      const blob = await res.blob();
+      const filename =
+        getExportFilename(res.headers.get("content-disposition")) ||
+        `citizens_export_${new Date().toISOString().replace(/[:.]/g, "-")}.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("تم تنزيل التصدير");
+    } catch (e: any) {
+      toast.error(e?.message || "تعذر تنزيل التصدير");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   /* Filter locally by search */
   const filtered = search.trim()
@@ -166,9 +203,17 @@ export default function CitizensPage() {
           <h1 className="text-xl font-semibold">سجلات المواطنين</h1>
           <p className="text-sm text-slate-500">البيانات المستخرجة من OCR أثناء التحقق</p>
         </div>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-          {loading ? "جاري التحميل..." : "تحديث"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => downloadExport("csv")} disabled={exporting === "csv"}>
+            {exporting === "csv" ? "Exporting..." : "Export CSV"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => downloadExport("pdf")} disabled={exporting === "pdf"}>
+            {exporting === "pdf" ? "Exporting..." : "Export PDF"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            {loading ? "جاري التحميل..." : "تحديث"}
+          </Button>
+        </div>
       </div>
 
       {/* Search */}

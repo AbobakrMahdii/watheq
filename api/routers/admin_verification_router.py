@@ -294,7 +294,10 @@ def _extract_document_reference(result_data: dict) -> str:
 async def get_verification_report(
     verification_id: int,
     format: str = Query("pdf"),
+    single: Optional[bool] = Query(True),
 ):
+    if not single:
+        raise HTTPException(status_code=400, detail="Single report flag is required")
     verifications = get_verifications_collection()
     notes_col = get_verification_notes_collection()
     item = await verifications.find_one(verification_id)

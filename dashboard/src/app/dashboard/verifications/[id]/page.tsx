@@ -73,6 +73,7 @@ export default function VerificationDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [overwriting, setOverwriting] = useState(false);
   const [me, setMe] = useState<{ role?: string } | null>(null);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -136,6 +137,48 @@ export default function VerificationDetailPage() {
       toast.error(e?.message || "???");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function getExportFilename(headerValue: string | null) {
+    if (!headerValue) return null;
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || null;
+  }
+
+  async function downloadReport() {
+    setReporting(true);
+    try {
+      if (!id) {
+        throw new Error("معرّف التحقق غير صالح");
+      }
+      const res = await fetch(`/api/admin/verifications/${id}/report?format=csv&single=true`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || json?.detail || "Failed to download report");
+      }
+      const blob = await res.blob();
+      const headerFilename = getExportFilename(res.headers.get("content-disposition"));
+      if (headerFilename && headerFilename.startsWith("verifications_export_")) {
+        throw new Error("تم استلام تقرير عام بدلاً من تقرير هذه العملية");
+      }
+      const filename =
+        headerFilename || `verification_${id}_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("\u062a\u0645 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+    } catch (e: any) {
+      toast.error(e?.message || "\u062a\u0639\u0630\u0631 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+    } finally {
+      setReporting(false);
     }
   }
 
@@ -270,13 +313,18 @@ export default function VerificationDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">تحقق #{verification.id}</h1>
-        <Badge
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={downloadReport} disabled={reporting}>
+            {reporting ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..." : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631 (CSV)"}
+          </Button>
+          <Badge
           variant={
             verification.status === "SUCCESS" ? "default" : verification.status === "FAILED" ? "destructive" : "outline"
           }
         >
           {STATUS_LABELS[verification.status] || verification.status}
         </Badge>
+        </div>
       </div>
 
       {/* Info */}
