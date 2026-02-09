@@ -38,7 +38,12 @@ type Analytics = {
   avg_processing_time_sec?: number;
 };
 
-const PIE_COLORS = ["#22c55e", "#ef4444", "#3b82f6", "#f59e0b"];
+const STATUS_COLORS: Record<string, string> = {
+  SUCCESS: "#22c55e", // green
+  FAILED: "#ef4444", // red
+  PENDING: "#3b82f6", // blue
+  RUNNING: "#f59e0b", // amber
+};
 const STATUS_AR: Record<string, string> = {
   SUCCESS: "ناجح",
   FAILED: "فشل",
@@ -71,6 +76,7 @@ export default function DashboardPage() {
     return Object.entries(stats.status_breakdown).map(([key, val]) => ({
       name: STATUS_AR[key] || key,
       value: val,
+      color: STATUS_COLORS[key] || "#94a3b8",
     }));
   }, [stats]);
 
@@ -145,8 +151,8 @@ export default function DashboardPage() {
                       dataKey="value"
                       label={({ name, value }) => `${name} (${value})`}
                     >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      {pieData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip />

@@ -323,7 +323,17 @@ export default function VerificationDetailPage() {
             {steps.map((s) => (
               <div key={s.id} className="flex items-center justify-between rounded border p-2 text-sm">
                 <span>{STAGE_LABELS[s.stage] || s.stage}</span>
-                <Badge variant={s.status === "SUCCESS" ? "default" : s.status === "FAILED" ? "destructive" : "outline"}>
+                <Badge
+                  variant={
+                    s.status === "SUCCESS"
+                      ? "success"
+                      : s.status === "FAILED"
+                        ? "destructive"
+                        : s.status === "RUNNING"
+                          ? "warning"
+                          : "info"
+                  }
+                >
                   {STATUS_LABELS[s.status] || s.status}
                 </Badge>
               </div>
