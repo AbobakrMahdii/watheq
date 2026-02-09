@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -18,6 +18,9 @@ export default function UsersPage() {
   const [me, setMe] = useState<{ role?: string; email?: string } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [templateDownloading, setTemplateDownloading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canManageRoles = me?.role === "super_admin";
   const canCreateUsers = me?.role === "admin" || me?.role === "super_admin";
@@ -125,6 +128,58 @@ export default function UsersPage() {
     }
   }
 
+  async function downloadTemplate() {
+    setTemplateDownloading(true);
+    try {
+      const res = await fetch("/api/admin/users/template", { cache: "no-store" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Failed to download template");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "user_data_template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Template downloaded");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to download template");
+    } finally {
+      setTemplateDownloading(false);
+    }
+  }
+
+  async function uploadUsers(file: File) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      toast.error("Please upload an .xlsx file");
+      return;
+    }
+    setBulkUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/admin/users/import", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Bulk import failed");
+
+      const created = data?.created ?? 0;
+      const skipped = data?.skipped ?? 0;
+      const errorCount = data?.error_count ?? 0;
+      toast.success(`Imported: ${created}, Skipped: ${skipped}, Errors: ${errorCount}`);
+      await loadUsers();
+    } catch (e: any) {
+      toast.error(e?.message || "Bulk import failed");
+    } finally {
+      setBulkUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   async function promoteToAdmin(id: string) {
     if (!canManageRoles) return toast.error("Super admin only");
     try {
@@ -226,6 +281,41 @@ export default function UsersPage() {
             <button onClick={resetForm} className="rounded border px-3 py-2 text-sm hover:bg-slate-50">
               Clear
             </button>
+          </div>
+        </div>
+      )}
+
+      {canCreateUsers && (
+        <div className="mb-4 rounded bg-white p-4 shadow">
+          <h2 className="mb-2 font-semibold">Bulk Import Users (Excel)</h2>
+          <p className="mb-3 text-sm text-slate-500">
+            Upload an .xlsx file with columns: name, username (optional), email, password.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={downloadTemplate}
+              disabled={templateDownloading}
+              className="rounded border px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
+            >
+              {templateDownloading ? "Downloading..." : "Download Template"}
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={bulkUploading}
+              className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {bulkUploading ? "Uploading..." : "Upload Excel"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadUsers(file);
+              }}
+            />
           </div>
         </div>
       )}
