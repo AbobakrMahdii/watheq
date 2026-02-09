@@ -114,17 +114,26 @@ export default function VerificationDetailPage() {
     if (!noteText.trim()) return;
     setSubmitting(true);
     try {
+      const verificationId = Number(id);
+      const payload = {
+        note: noteText.trim(),
+        verification_id: Number.isFinite(verificationId) ? verificationId : undefined,
+      };
+      console.debug("[addNote] payload", payload);
       const res = await fetch(`/api/admin/verifications/${id}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: noteText }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("فشل إضافة الملاحظة");
+      const data = await res.json().catch(() => ({}));
+      console.debug("[addNote] response", res.status, data);
+      const errorMessage = data?.message || data?.detail?.message || data?.detail || "??? ????? ????????";
+      if (!res.ok) throw new Error(errorMessage);
       setNoteText("");
-      toast.success("تمت إضافة الملاحظة");
+      toast.success(data?.message || "??? ????? ????????");
       load();
     } catch (e: any) {
-      toast.error(e?.message);
+      toast.error(e?.message || "???");
     } finally {
       setSubmitting(false);
     }

@@ -62,9 +62,16 @@ const STAGE_LABELS: Record<string, string> = {
 export default function VerificationsPage() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [reportingId, setReportingId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [userName, setUserName] = useState("");
+  const [operationType, setOperationType] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const pageSize = 20;
 
   const load = useCallback(async () => {
@@ -76,56 +83,185 @@ export default function VerificationsPage() {
       });
       if (status) params.set("status", status);
       if (search) params.set("search", search);
+      if (userName) params.set("user_name", userName);
+      if (operationType) params.set("operation_type", operationType);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
 
       const res = await fetch(`/api/admin/verifications?${params}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "فشل تحميل البيانات");
       setData(json);
     } catch (e: any) {
-      toast.error(e?.message || "فشل تحميل التحققات");
+      toast.error(e?.message || "\u062a\u0639\u0630\u0631 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
     } finally {
       setLoading(false);
     }
-  }, [page, status, search]);
+  }, [page, status, search, userName, operationType, dateFrom, dateTo]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  function getExportFilename(headerValue: string | null) {
+    if (!headerValue) return null;
+    const match = headerValue.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || null;
+  }
+
+  async function exportData() {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      if (search) params.set("search", search);
+      if (userName) params.set("user_name", userName);
+      if (operationType) params.set("operation_type", operationType);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      params.set("format", "csv");
+
+      const res = await fetch(`/api/admin/verifications/export?${params}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Export failed");
+      }
+
+      const blob = await res.blob();
+      const filename =
+        getExportFilename(res.headers.get("content-disposition")) ||
+        `verifications_export_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("\u062a\u0645 \u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631");
+    } catch (e: any) {
+      toast.error(e?.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function resetFilters() {
+    setSearchInput("");
+    setUserName("");
+    setOperationType("");
+    setStatus("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  }
+
+  async function downloadReport(id: number) {
+    setReportingId(id);
+    try {
+      const res = await fetch(`/api/admin/verifications/${id}/report?format=pdf`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json?.message || "Failed to download report");
+      }
+      const blob = await res.blob();
+      const filename =
+        getExportFilename(res.headers.get("content-disposition")) ||
+        `verification_${id}_${new Date().toISOString().replace(/[:.]/g, "-")}.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("تم تنزيل التقرير");
+    } catch (e: any) {
+      toast.error(e?.message || "تعذر تنزيل التقرير");
+    } finally {
+      setReportingId(null);
+    }
+  }
+
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
+  const operationOptions = Object.keys(STAGE_LABELS);
 
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">التحققات</h1>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-          {loading ? "جاري التحميل..." : "تحديث"}
-        </Button>
+        <h1 className="text-xl font-semibold">{"\u0627\u0644\u062a\u062d\u0642\u0642\u0627\u062a"}</h1>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={exportData} disabled={exporting}>
+            {exporting ? "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u0635\u062f\u064a\u0631..." : "\u062a\u0635\u062f\u064a\u0631 CSV"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            {loading ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u062d\u0645\u064a\u0644..." : "\u062a\u062d\u062f\u064a\u062b"}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <Input
-          placeholder="بحث بالاسم أو البريد..."
+          placeholder="\u0628\u062d\u062b \u0628\u0627\u0644\u0627\u0633\u0645 \u0623\u0648 \u0627\u0644\u0628\u0631\u064a\u062f \u0623\u0648 \u0627\u0644\u0648\u062d\u062f\u0629..."
           className="w-64"
-          value={search}
+          value={searchInput}
           onChange={(e) => {
-            setSearch(e.target.value);
+            setSearchInput(e.target.value);
+          }}
+        />
+        <Input
+          placeholder="\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645"
+          className="w-48"
+          value={userName}
+          onChange={(e) => {
+            setUserName(e.target.value);
             setPage(1);
           }}
         />
         <Select
-          value={status}
+          value={operationType || "ALL"}
+          onValueChange={(v) => {
+            setOperationType(v === "ALL" ? "" : v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-52">
+            <SelectValue placeholder="\u0646\u0648\u0639 \u0627\u0644\u0639\u0645\u0644\u064a\u0629" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">\u0627\u0644\u0643\u0644</SelectItem>
+            {operationOptions.map((s) => (
+              <SelectItem key={s} value={s}>
+                {STAGE_LABELS[s] || s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={status || "ALL"}
           onValueChange={(v) => {
             setStatus(v === "ALL" ? "" : v);
             setPage(1);
           }}
         >
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="الحالة" />
+            <SelectValue placeholder="\u0627\u0644\u062d\u0627\u0644\u0629" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">الكل</SelectItem>
+            <SelectItem value="ALL">\u0627\u0644\u0643\u0644</SelectItem>
             {STATUS_OPTIONS.filter(Boolean).map((s) => (
               <SelectItem key={s} value={s}>
                 {STATUS_LABELS[s] || s}
@@ -133,6 +269,27 @@ export default function VerificationsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Input
+          type="datetime-local"
+          className="w-56"
+          value={dateFrom}
+          onChange={(e) => {
+            setDateFrom(e.target.value);
+            setPage(1);
+          }}
+        />
+        <Input
+          type="datetime-local"
+          className="w-56"
+          value={dateTo}
+          onChange={(e) => {
+            setDateTo(e.target.value);
+            setPage(1);
+          }}
+        />
+        <Button variant="outline" onClick={resetFilters}>
+          {"\u0625\u0639\u0627\u062f\u0629 \u0636\u0628\u0637 \u0627\u0644\u0641\u0644\u0627\u062a\u0631"}
+        </Button>
       </div>
 
       {/* Table */}
@@ -180,11 +337,21 @@ export default function VerificationsPage() {
                       {v.created_at ? new Date(v.created_at).toLocaleDateString("ar-YE") : "—"}
                     </TableCell>
                     <TableCell>
-                      <Link href={`/dashboard/verifications/${v.id}`}>
-                        <Button size="sm" variant="ghost">
-                          عرض
+                      <div className="flex items-center gap-2">
+                        <Link href={`/dashboard/verifications/${v.id}`}>
+                          <Button size="sm" variant="ghost">
+                            ???
+                          </Button>
+                        </Link>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => downloadReport(v.id)}
+                          disabled={reportingId === v.id}
+                        >
+                          {reportingId === v.id ? "\u062c\u0627\u0631\u064a \u0627\u0644\u062a\u0646\u0632\u064a\u0644..." : "\u062a\u0646\u0632\u064a\u0644 \u0627\u0644\u062a\u0642\u0631\u064a\u0631"}
                         </Button>
-                      </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

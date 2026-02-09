@@ -40,6 +40,10 @@ export default function AdminsPage() {
     setFormPassword("");
   }
 
+  function getErrorMessage(data: any, fallback: string) {
+    return data?.message || data?.detail?.message || data?.detail || fallback;
+  }
+
   async function loadAdmins() {
     setLoading(true);
     try {
@@ -48,14 +52,14 @@ export default function AdminsPage() {
       if (!meRes.ok) throw new Error(meData?.message || "Unauthorized");
       setMe(meData);
 
-      if (meData?.role !== "super_admin") {
-        toast.error("Super admin only");
+      if (meData?.role !== "super_admin" && meData?.role !== "admin_manager") {
+        toast.error("Super admin or Admin Manager only");
         return;
       }
 
       const adminsRes = await fetch("/api/admin/admins");
       const adminsData = await adminsRes.json().catch(() => []);
-      if (!adminsRes.ok) throw new Error(adminsData?.message || "Failed to load admins");
+      if (!adminsRes.ok) throw new Error(getErrorMessage(adminsData, "Failed to load admins"));
       setAdmins(Array.isArray(adminsData) ? adminsData : []);
     } catch (e: any) {
       toast.error(e?.message || "Failed to load admins");
@@ -69,7 +73,8 @@ export default function AdminsPage() {
   }, []);
 
   async function createAdmin() {
-    if (me?.role !== "super_admin") return toast.error("Super admin only");
+    if (me?.role !== "super_admin" && me?.role !== "admin_manager")
+      return toast.error("Super admin or Admin Manager only");
     if (!formName.trim() || !formEmail.trim() || !formPassword) return toast.error("All fields are required");
     try {
       const res = await fetch("/api/admin/admins/create", {
@@ -83,7 +88,7 @@ export default function AdminsPage() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Request failed");
+      if (!res.ok) throw new Error(getErrorMessage(data, "Failed to create admin"));
       toast.success("Admin created");
       resetForm();
       await loadAdmins();
@@ -93,11 +98,12 @@ export default function AdminsPage() {
   }
 
   async function demoteToUser(id: string, role: string) {
-    if (me?.role !== "super_admin") return toast.error("Super admin only");
+    if (me?.role !== "super_admin" && me?.role !== "admin_manager")
+      return toast.error("Super admin or Admin Manager only");
     try {
       const res = await fetch(`/api/admin/users/${id}/remove-admin`, { method: "PUT" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Request failed");
+      if (!res.ok) throw new Error(getErrorMessage(data, "Failed to remove admin"));
       toast.success("Admin removed");
       await loadAdmins();
     } catch (e: any) {
@@ -134,7 +140,7 @@ export default function AdminsPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Request failed");
+      if (!res.ok) throw new Error(getErrorMessage(data, "Failed to update admin"));
       toast.success("Admin updated");
       setEditOpen(false);
       await loadAdmins();
@@ -147,10 +153,10 @@ export default function AdminsPage() {
   const meId = me?.id != null ? String(me.id) : "";
   const isMeFirstSuperAdmin = admins.some((a) => a._id === meId && a.is_first_super_admin);
 
-  if (me && me.role !== "super_admin") {
+  if (me && me.role !== "super_admin" && me.role !== "admin_manager") {
     return (
       <div className="rounded border bg-white p-6 text-sm text-slate-600">
-        This page is available for super admins only.
+        This page is available for Super Admins or Admin Managers only.
       </div>
     );
   }

@@ -38,7 +38,7 @@ export default function DashboardSidebar() {
       { href: "/dashboard/audit-logs", label: "سجل العمليات" },
       { href: "/dashboard/blockchain", label: "البلوكتشين" },
     ];
-    if (me?.role === "super_admin") {
+    if (me?.role === "super_admin" || me?.role === "admin_manager") {
       baseLinks.splice(3, 0, { href: "/dashboard/admins", label: "Admins" });
     }
     return baseLinks;
