@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimensions.dart';
+import '../../features/auth/models/user_profile.dart';
+import '../../features/auth/services/auth_service.dart';
 import '../../features/biometric/models/face_verify_result.dart';
 import '../../features/verification/models/ipfs_pin_result.dart';
 import '../../features/verification/models/verification_models.dart';
@@ -44,6 +46,7 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
   String? _error;
   List<VerificationStep> _steps = [];
   VerificationStage? _currentStage;
+  UserProfile? _profile;
 
   @override
   void initState() {
@@ -152,9 +155,12 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
         dataVerificationResult: dataVerification,
       );
 
+      final profile = await AuthService.instance.fetchProfile();
+
       if (!mounted) return;
       setState(() {
         _result = result;
+        _profile = profile;
         _isLoading = false;
       });
       // Verification finished on-screen — dismiss the tracker (no notification needed).
@@ -170,6 +176,12 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       });
       AppSnackbars.error(context, _error!);
     }
+  }
+
+  
+  bool _isAdmin() {
+    final role = _profile?.role ?? '';
+    return role == 'super_admin' || role == 'admin';
   }
 
   @override
@@ -191,6 +203,7 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
                     documentDecision: _documentDecision,
                     documentPercent: _documentPercent,
                     steps: _steps,
+                    isAdmin: _isAdmin(),
                   ),
           ),
         ),
@@ -323,6 +336,7 @@ class _ResultView extends StatelessWidget {
     required this.documentDecision,
     required this.documentPercent,
     required this.steps,
+    required this.isAdmin,
   });
 
   final SubmitVerificationResult result;
@@ -330,6 +344,7 @@ class _ResultView extends StatelessWidget {
   final String? documentDecision;
   final double? documentPercent;
   final List<VerificationStep> steps;
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -625,6 +640,8 @@ class _ResultView extends StatelessWidget {
         if (result.dataVerificationResult.isNotEmpty)
           const SizedBox(height: 12),
 
+        if(isAdmin)...[
+
         // ---------- Blockchain ----------
         Card(
           child: Padding(
@@ -658,6 +675,7 @@ class _ResultView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        ],
 
         // ---------- OCR ----------
         Card(
