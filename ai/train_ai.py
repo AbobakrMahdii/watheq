@@ -485,7 +485,7 @@ def train_doc_type(
         "trained_at": datetime.now().isoformat(),
         "layout": learned_layout,
         "thresholds": {
-            "pass_score": layout_config.get("thresholds", {}).get("pass_score", 0.95),
+            "pass_score": layout_config.get("thresholds", {}).get("pass_score", 0.70),
             "suspicious_score": layout_config.get("thresholds", {}).get(
                 "suspicious_score", 0.70
             ),

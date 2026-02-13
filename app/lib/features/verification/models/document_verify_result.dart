@@ -2,12 +2,14 @@ class DocumentVerifyResult {
   const DocumentVerifyResult({
     required this.finalDecision,
     required this.authenticityPercent,
+    required this.passThresholdPercent,
     required this.logoDecision,
     required this.stampDecision,
   });
 
   final String finalDecision;
   final double? authenticityPercent;
+  final double? passThresholdPercent;
   final String? logoDecision;
   final String? stampDecision;
 
@@ -18,6 +20,8 @@ class DocumentVerifyResult {
       finalDecision: (json['final_decision'] as String?) ?? '',
       authenticityPercent:
           (json['authenticity_percent'] as num?)?.toDouble(),
+      passThresholdPercent:
+          (json['pass_threshold_percent'] as num?)?.toDouble(),
       logoDecision: (logo?['decision'] as String?),
       stampDecision: (stamp?['decision'] as String?),
     );

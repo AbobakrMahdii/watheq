@@ -244,6 +244,7 @@ export default function VerificationDetailPage() {
   const rd = verification.result_data || {};
   const face = rd.FACE_MATCHING || {};
   const ai = rd.AI_VERIFICATION || {};
+  const aiElements = ai.element_results || ai.elements || {};
   const ocr = rd.OCR || {};
   const dataV = rd.DATA_VERIFICATION || {};
   const bc = rd.BLOCKCHAIN || {};
@@ -420,19 +421,26 @@ export default function VerificationDetailPage() {
           <CardContent className="space-y-2 text-sm">
             <div>
               القرار:{" "}
-              <Badge variant={ai.final_decision === "AUTHENTIC" ? "default" : "destructive"}>
+              <Badge variant={ai.final_decision === "PASSED" ? "default" : "destructive"}>
                 {ai.final_decision || "—"}
               </Badge>
             </div>
             {ai.authenticity_percent != null && <div>نسبة الأصالة: {Number(ai.authenticity_percent).toFixed(1)}%</div>}
-            {ai.elements && typeof ai.elements === "object" && (
+            {ai.pass_threshold_percent != null && (
+              <div>عتبة النجاح: {Number(ai.pass_threshold_percent).toFixed(1)}%</div>
+            )}
+            {aiElements && typeof aiElements === "object" && (
               <div className="mt-2 space-y-1">
                 <div className="font-medium">تفاصيل العناصر:</div>
-                {Object.entries(ai.elements).map(([key, val]: [string, any]) => (
+                {Object.entries(aiElements).map(([key, val]: [string, any]) => (
                   <div key={key} className="flex justify-between border-b py-1">
                     <span>{key}</span>
                     <span className="font-mono">
-                      {val?.confidence != null ? `${(Number(val.confidence) * 100).toFixed(0)}%` : val?.status || "—"}
+                      {val?.score != null
+                        ? `${(Number(val.score) * 100).toFixed(1)}%`
+                        : val?.confidence != null
+                          ? `${(Number(val.confidence) * 100).toFixed(1)}%`
+                          : val?.status || "—"}
                     </span>
                   </div>
                 ))}

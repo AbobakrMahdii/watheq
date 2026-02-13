@@ -26,6 +26,15 @@ def _compute_percent(element_results: Dict[str, Any]) -> Optional[float]:
         return None
 
 
+def _compute_percent_from_result(result: Dict[str, Any]) -> Optional[float]:
+    """Prefer weighted overall confidence; fallback to legacy element average."""
+    overall = result.get("overall_confidence")
+    if isinstance(overall, (int, float)):
+        return float(overall) * 100.0
+    element_results = result.get("element_results", {})
+    return _compute_percent(element_results)
+
+
 def _run_verify_document(input_path: Path, doc_type_folder: str = "identity") -> Dict[str, Any]:
     """
     Run `ai/verify_document.py` as a subprocess and return the JSON result.
@@ -80,7 +89,13 @@ async def verify_document(
             result = _run_verify_document(input_path, doc_type)
 
             element_results = result.get("element_results", {})
-            authenticity_percent = _compute_percent(element_results)
+            authenticity_percent = _compute_percent_from_result(result)
+            pass_threshold = result.get("pass_threshold")
+            pass_threshold_percent = (
+                float(pass_threshold) * 100.0
+                if isinstance(pass_threshold, (int, float))
+                else None
+            )
 
             request.state.audit_logged = True
             await log_file_event(
@@ -94,6 +109,7 @@ async def verify_document(
             return {
                 "final_decision": result.get("decision"),
                 "authenticity_percent": authenticity_percent,
+                "pass_threshold_percent": pass_threshold_percent,
                 "failed_elements": result.get("failed_elements", []),
                 "element_results": element_results,
             }

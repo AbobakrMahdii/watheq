@@ -876,19 +876,35 @@ def ml_verify(
 
     result = json.loads(proc.stdout)
 
-    # Calculate authenticity percent from element scores
+    # Prefer the weighted overall confidence used by verify_document.py
+    # for the final decision. Keep a fallback to the legacy average in
+    # case overall_confidence is absent.
+    overall_confidence = result.get("overall_confidence")
+    authenticity_percent = None
+    if isinstance(overall_confidence, (int, float)):
+        authenticity_percent = float(overall_confidence) * 100.0
+
+    pass_threshold = result.get("pass_threshold")
+    pass_threshold_percent = None
+    if isinstance(pass_threshold, (int, float)):
+        pass_threshold_percent = float(pass_threshold) * 100.0
+
+    # Legacy fallback: average element scores
     element_results = result.get("element_results", {})
-    scores = [
-        r.get("score", 0)
-        for r in element_results.values()
-        if r.get("status") != "ERROR"
-    ]
-    authenticity_percent = (sum(scores) / len(scores) * 100) if scores else None
+    if authenticity_percent is None:
+        scores = [
+            r.get("score", 0)
+            for r in element_results.values()
+            if r.get("status") != "ERROR"
+        ]
+        authenticity_percent = (sum(scores) / len(scores) * 100) if scores else None
 
     return {
         "final_decision": result.get("decision"),
         "authenticity_percent": authenticity_percent,
+        "pass_threshold_percent": pass_threshold_percent,
         "failed_elements": result.get("failed_elements", []),
+        "elements": result.get("elements", {}),
         "element_results": element_results,
     }
 

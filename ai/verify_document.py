@@ -7,7 +7,7 @@ Watheq Document Verification Script (v3 — Trained Classifiers + Font Analysis)
 2. مصنف ثنائي مدرب لكل عنصر — القرار من التعلم لا من المراجع
 3. تحليل خصائص الخطوط للمناطق النصية
 4. التحقق من مواقع العناصر وأحجامها
-5. قرار نهائي مرجح — الحد الأدنى للنجاح 85%
+5. قرار نهائي مرجح — الحد الأدنى للنجاح من config (افتراضيا 70%)
 
 Usage:
     python ai/verify_document.py --image doc.jpg --type identity --json
@@ -15,7 +15,7 @@ Usage:
 
 Returns detailed JSON:
 {
-    "decision": "PASSED|SUSPICIOUS|FAILED",
+    "decision": "PASSED|FAILED",
     "overall_confidence": 0.92,
     "elements": { ... per-element details ... },
     "missing_elements": [],
@@ -306,8 +306,7 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
         }
 
     thresholds = layout_config.get("thresholds", {})
-    pass_score = thresholds.get("pass_score", 0.95)
-    suspicious_score = thresholds.get("suspicious_score", 0.70)
+    pass_score = thresholds.get("pass_score", 0.70)
 
     # Get all elements from config
     all_elements = _get_all_elements(layout_config)
@@ -450,11 +449,9 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
     if missing_elements:
         anomalies.append(f"Missing elements: {', '.join(missing_elements)}")
 
-    # Step 5: Final decision — 85% to pass
+    # Step 5: Final decision — binary PASS/FAIL
     if overall_confidence >= pass_score and not missing_elements:
         decision = "PASSED"
-    elif overall_confidence >= suspicious_score:
-        decision = "SUSPICIOUS"
     else:
         decision = "FAILED"
 
@@ -477,6 +474,7 @@ def verify(image_path: str, doc_type: str) -> Dict[str, Any]:
         "decision": decision,
         "overall_confidence": round(overall_confidence, 4),
         "pass_threshold": pass_score,
+        "pass_threshold_percent": round(float(pass_score) * 100, 2),
         "elements": elements_result,
         "missing_elements": missing_elements,
         "failed_elements": failed_elements,
@@ -515,7 +513,7 @@ def main():
     else:
         decision = result["decision"]
         confidence = result["overall_confidence"]
-        threshold = result.get("pass_threshold", 0.85)
+        threshold = result.get("pass_threshold", 0.70)
         print(f"\n{'='*60}")
         print(f"  Document Verification: {result.get('document_type', 'unknown')}")
         print(f"{'='*60}")

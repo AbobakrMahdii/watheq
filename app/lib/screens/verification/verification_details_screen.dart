@@ -389,7 +389,12 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
     final decision = ai['final_decision'] as String?;
     final percent = ai['authenticity_percent'];
     final percentValue = percent is num ? percent.toDouble() : null;
-    final elements = (ai['elements'] as Map?)?.cast<String, dynamic>() ?? {};
+    final thresholdPercent = ai['pass_threshold_percent'];
+    final thresholdPercentValue =
+        thresholdPercent is num ? thresholdPercent.toDouble() : null;
+    final elements = (ai['element_results'] as Map?)?.cast<String, dynamic>() ??
+        (ai['elements'] as Map?)?.cast<String, dynamic>() ??
+        {};
 
     return Column(
       children: [
@@ -408,10 +413,10 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
                   Row(
                     children: [
                       Icon(
-                        (decision ?? '').toUpperCase() == 'AUTHENTIC'
+                        (decision ?? '').toUpperCase() == 'PASSED'
                             ? Icons.verified
                             : Icons.info_outline,
-                        color: (decision ?? '').toUpperCase() == 'AUTHENTIC'
+                        color: (decision ?? '').toUpperCase() == 'PASSED'
                             ? AppColors.success
                             : AppColors.textSecondary,
                       ),
@@ -423,6 +428,8 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
                               'القرار: $decision',
                             if (percentValue != null)
                               'النسبة: ${percentValue.toStringAsFixed(1)}%',
+                            if (thresholdPercentValue != null)
+                              'العتبة: ${thresholdPercentValue.toStringAsFixed(1)}%',
                           ].join(' • '),
                         ),
                       ),
@@ -441,12 +448,13 @@ class _VerificationDetailsScreenState extends State<VerificationDetailsScreen> {
                   const SizedBox(height: 6),
                   ...elements.entries.map((entry) {
                     final eData = entry.value is Map ? entry.value as Map : {};
-                    final conf = eData['confidence'];
+                    final conf = eData['score'] ?? eData['confidence'];
                     final status = eData['status']?.toString() ?? '';
                     final confText = conf is num
-                        ? '${(conf * 100).toStringAsFixed(0)}%'
+                        ? '${(conf * 100).toStringAsFixed(1)}%'
                         : '';
                     final isOk =
+                        status.toUpperCase() == 'PASSED' ||
                         status.toUpperCase() == 'OK' ||
                         status.toUpperCase() == 'PASS';
                     return Padding(

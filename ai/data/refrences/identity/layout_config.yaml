@@ -68,11 +68,11 @@ text_regions:
 
 # Thresholds
 thresholds:
-  pass_score: 0.95
+  pass_score: 0.70
   suspicious_score: 0.70
   fail_score: 0.0
 
-# Training parameters — deep training for 95% threshold
+# Training parameters
 training:
   n_genuine: 1000
   n_forged: 1000

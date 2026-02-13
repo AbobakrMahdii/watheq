@@ -40,6 +40,7 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
   SubmitVerificationResult? _result;
   String? _documentDecision;
   double? _documentPercent;
+  double? _documentPassThresholdPercent;
   String? _error;
   List<VerificationStep> _steps = [];
   VerificationStage? _currentStage;
@@ -55,6 +56,9 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       _isLoading = true;
       _error = null;
       _result = null;
+      _documentDecision = null;
+      _documentPercent = null;
+      _documentPassThresholdPercent = null;
       _steps = [];
       _currentStage = null;
     });
@@ -127,6 +131,10 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
       if (percent is num) {
         _documentPercent = percent.toDouble();
       }
+      final thresholdPercent = ai['pass_threshold_percent'];
+      if (thresholdPercent is num) {
+        _documentPassThresholdPercent = thresholdPercent.toDouble();
+      }
 
       final dataVerification =
           (data['DATA_VERIFICATION'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -137,7 +145,10 @@ class _VerificationResultScreenState extends State<VerificationResultScreen> {
         ocr: ocr,
         docId: blockchain['doc_id'] ?? '',
         sha256: blockchain['sha256'] ?? '',
-        aiElements: (ai['elements'] as Map?)?.cast<String, dynamic>() ?? {},
+        aiPassThresholdPercent: _documentPassThresholdPercent,
+        aiElements: (ai['element_results'] as Map?)?.cast<String, dynamic>() ??
+            (ai['elements'] as Map?)?.cast<String, dynamic>() ??
+            {},
         dataVerificationResult: dataVerification,
       );
 
@@ -404,12 +415,12 @@ class _ResultView extends StatelessWidget {
                   Row(
                     children: [
                       Icon(
-                        (documentDecision ?? '').toUpperCase() == 'AUTHENTIC'
+                        (documentDecision ?? '').toUpperCase() == 'PASSED'
                             ? Icons.verified
                             : Icons.info_outline,
                         color:
                             (documentDecision ?? '').toUpperCase() ==
-                                'AUTHENTIC'
+                                'PASSED'
                             ? AppColors.success
                             : AppColors.textSecondary,
                       ),
@@ -421,6 +432,8 @@ class _ResultView extends StatelessWidget {
                               'القرار: $documentDecision',
                             if (documentPercent != null)
                               'النسبة: ${documentPercent!.toStringAsFixed(1)}%',
+                            if (result.aiPassThresholdPercent != null)
+                              'العتبة: ${result.aiPassThresholdPercent!.toStringAsFixed(1)}%',
                           ].join(' • '),
                         ),
                       ),
@@ -442,12 +455,14 @@ class _ResultView extends StatelessWidget {
                     final elementData = entry.value is Map
                         ? entry.value as Map
                         : {};
-                    final conf = elementData['confidence'];
+                    final conf =
+                        elementData['score'] ?? elementData['confidence'];
                     final status = elementData['status']?.toString() ?? '';
                     final confText = conf is num
-                        ? '${(conf * 100).toStringAsFixed(0)}%'
+                        ? '${(conf * 100).toStringAsFixed(1)}%'
                         : '';
                     final isOk =
+                        status.toUpperCase() == 'PASSED' ||
                         status.toUpperCase() == 'OK' ||
                         status.toUpperCase() == 'PASS';
                     return Padding(

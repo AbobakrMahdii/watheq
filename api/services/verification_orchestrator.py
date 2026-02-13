@@ -108,6 +108,7 @@ class VerificationOrchestrator:
             "NATIONAL_ID_MISSING": "\u0631\u0642\u0645 \u0627\u0644\u0647\u0648\u064a\u0629 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f",
             "FACE_MATCH_FAILED": "\u0641\u0634\u0644 \u0645\u0637\u0627\u0628\u0642\u0629 \u0627\u0644\u0648\u062c\u0647",
             "FACE_MISMATCH": "\u0627\u0644\u0648\u062c\u0647 \u0644\u0627 \u064a\u0637\u0627\u0628\u0642 \u0635\u0648\u0631\u0629 \u0627\u0644\u0633\u064a\u0644\u0641\u064a",
+            "AI_VALIDATION_FAILED": "\u0641\u0634\u0644 \u062a\u062d\u0642\u0642 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a",
             "DATA_FRAUD_SUSPECTED": "محاولة احتيال — بيانات الوثيقة لا تطابق السجل المحفوظ",
             "NATIONAL_ID_NOT_EXTRACTED": "لم يتم استخراج رقم الهوية من الوثيقة",
             "UNKNOWN_ERROR": "\u062d\u062f\u062b \u062e\u0637\u0623 \u0623\u062b\u0646\u0627\u0621 \u0627\u0644\u062a\u062d\u0642\u0642",
@@ -145,6 +146,8 @@ class VerificationOrchestrator:
             return "FACE_MATCH_FAILED"
         if "Face mismatch" in msg:
             return "FACE_MISMATCH"
+        if "AI validation failed" in msg:
+            return "AI_VALIDATION_FAILED"
         if "Fraud suspected" in msg or "fraud" in msg.lower():
             return "DATA_FRAUD_SUSPECTED"
         if "National_id not extracted" in msg:
@@ -363,6 +366,16 @@ class VerificationOrchestrator:
                         src,
                         doc_folder,
                     )
+                    final_decision = str(result.get("final_decision") or "").upper()
+                    if final_decision != "PASSED":
+                        score_pct = result.get("authenticity_percent")
+                        threshold_pct = result.get("pass_threshold_percent")
+                        failure_reason_code = "AI_VALIDATION_FAILED"
+                        raise RuntimeError(
+                            "AI validation failed: "
+                            f"decision={final_decision or 'UNKNOWN'} "
+                            f"score={score_pct}% threshold={threshold_pct}%"
+                        )
                 elif stage == VerificationStage.DATA_VERIFICATION:
                     ocr_result = results.get(VerificationStage.OCR.value) or {}
                     result = await data_verification(

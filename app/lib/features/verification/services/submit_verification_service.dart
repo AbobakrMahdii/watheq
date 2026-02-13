@@ -16,6 +16,7 @@ class SubmitVerificationResult {
     required this.ocr,
     required this.docId,
     required this.sha256,
+    this.aiPassThresholdPercent,
     this.aiElements = const {},
     this.dataVerificationResult = const {},
   });
@@ -25,6 +26,7 @@ class SubmitVerificationResult {
   final Map<String, dynamic> ocr;
   final String docId;
   final String sha256;
+  final double? aiPassThresholdPercent;
 
   /// نتائج تحقق الذكاء الاصطناعي لكل عنصر (logo, stamp, ...)
   final Map<String, dynamic> aiElements;
